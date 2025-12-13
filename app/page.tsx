@@ -2,8 +2,7 @@
 import { useState } from "react";
 import Envelope from "@/components/Envelope";
 import UploadButton from "@/components/UploadButton";
-import TextEditor from "@/components/TextEditor"; // Import trình soạn thảo mới
-import { Send, Loader2, PenLine, X, Music } from "lucide-react";
+import { Send, Loader2, PenLine, X, Music, Type } from "lucide-react"; 
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
@@ -11,9 +10,10 @@ export default function Home() {
     recipientName: "",
     envelopeColor: "#8d6e63",
     waxColor: "#b91c1c",
-    content: "", // Nội dung sẽ là HTML
+    content: "",
     images: [] as string[],
     music: "none",
+    fontStyle: 'dancing', 
     isPreview: true,
   });
 
@@ -22,6 +22,19 @@ export default function Home() {
   const musicOptions = [
     { id: "none", name: "Không dùng nhạc" },
     { id: "/music/piano1.mp3", name: "🎹 Piano Nhẹ Nhàng" },
+  ];
+
+  // CẬP NHẬT: Danh sách 12 tùy chọn phông chữ mới
+  const fontOptions = [
+    { id: 'dancing', name: '✍️ Thư Pháp Lãng Mạn (Dancing)', style: 'font-dancing' },
+    { id: 'kaushan', name: '📜 Thư Pháp Cổ (Kaushan Script)', style: 'font-kaushan' },
+    { id: 'pinyon', name: '🎀 Kịch Bản Duyên Dáng (Pinyon)', style: 'font-pinyon' },
+    { id: 'arizonia', name: '🌸 Nghệ Thuật Duyên Dáng (Arizonia)', style: 'font-arizonia' },
+    { id: 'pacifico', name: '🌊 Sóng Biển Lãng Mạn (Pacifico)', style: 'font-pacifico' },
+    { id: 'lobster', name: '🦞 Logo Nổi Bật (Lobster)', style: 'font-lobster' },
+    { id: 'lexend', name: '🖥️ Hiện Đại Rõ Ràng (Lexend)', style: 'font-lexend' },
+    { id: 'vibes', name: '🌟 Phong Cách Cổ Điển (Vibes)', style: 'font-vibes' },
+    { id: 'charm', name: '💖 Chân Thành Dịu Dàng (Charm)', style: 'font-charm' },
   ];
 
   const handleAddImage = (url: string) => {
@@ -37,8 +50,7 @@ export default function Home() {
 
   const handleSave = async () => {
     if (!config.recipientName) return alert("Chưa nhập tên người nhận!");
-    // Vẫn kiểm tra nội dung, dù là HTML
-    if (config.content.length < 10) return alert("Thư chưa có nội dung, gửi phong bì rỗng kỳ lắm!"); 
+    if (!config.content) return alert("Thư chưa có nội dung!"); 
     
     setLoading(true);
 
@@ -49,9 +61,10 @@ export default function Home() {
           recipient_name: config.recipientName,
           envelope_color: config.envelopeColor,
           wax_color: config.waxColor,
-          content: config.content, // Lưu nội dung HTML
+          content: config.content, 
           image_urls: config.images,
-          music: config.music
+          music: config.music,
+          font_style: config.fontStyle, 
         }
       ])
       .select()
@@ -66,6 +79,8 @@ export default function Home() {
       prompt("Tạo thư thành công! Copy link:", link);
     }
   };
+
+  const currentFontClass = fontOptions.find(f => f.id === config.fontStyle)?.style || 'font-serif';
 
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-gray-50 font-sans">
@@ -103,8 +118,24 @@ export default function Home() {
              ))}
            </select>
         </div>
+        
+        {/* 3. Chọn Kiểu Chữ */}
+        <div>
+           <label className="text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+             <Type size={14}/> Kiểu chữ thư tay
+           </label>
+           <select 
+             value={config.fontStyle}
+             onChange={(e) => setConfig({...config, fontStyle: e.target.value})}
+             className="w-full p-3 border rounded-lg bg-gray-50 cursor-pointer outline-none focus:ring-2 focus:ring-black"
+           >
+             {fontOptions.map((option) => (
+               <option key={option.id} value={option.id} className={option.style}>{option.name}</option>
+             ))}
+           </select>
+        </div>
 
-        {/* 3. Upload Ảnh */}
+        {/* 4. Upload Ảnh */}
         <div>
            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Kẹp thêm ảnh (Tối đa 4)</label>
            <div className="grid grid-cols-4 gap-2 mb-2">
@@ -125,17 +156,18 @@ export default function Home() {
            )}
         </div>
 
-        {/* 4. Nội dung (Rich Text Editor - MỚI) */}
-        <div className="flex-1 flex flex-col min-h-[250px]">
+        {/* 5. Nội dung */}
+        <div className="flex-1 flex flex-col">
           <label className="text-xs font-bold text-gray-500 uppercase">Lời nhắn</label>
-          <TextEditor
-            content={config.content}
-            onChange={(htmlContent) => setConfig({...config, content: htmlContent})}
+          <textarea 
+            value={config.content}
+            onChange={(e) => setConfig({...config, content: e.target.value})}
+            className={`w-full mt-1 flex-1 p-4 border rounded-lg bg-yellow-50/50 resize-none min-h-[150px] text-lg leading-relaxed ${currentFontClass}`} 
             placeholder="Viết những lời từ trái tim vào đây..."
           />
         </div>
 
-        {/* 5. Màu sắc */}
+        {/* 6. Màu sắc */}
         <div>
           <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Màu phong bì</label>
           <div className="flex gap-2 overflow-x-auto pb-2">

@@ -1,16 +1,39 @@
+// File: app/layout.tsx
 import './globals.css';
 import type { Metadata } from 'next';
-// Import phông chữ từ Google Fonts
-import { Dancing_Script, Inter } from 'next/font/google';
+import { Inter } from 'next/font/google';
 
-// Khai báo phông chữ viết tay (Dancing Script)
-const dancingScript = Dancing_Script({ 
-  subsets: ['vietnamese'], // Quan trọng: Chọn subset tiếng Việt
-  variable: '--font-handwriting', // Đặt tên biến CSS
-  display: 'swap',
-});
+// Import 9 phông chữ bạn muốn giữ lại
+import { 
+  Dancing_Script, 
+  Lexend, 
+  Pacifico, 
+  Lobster,
+  Arizonia, 
+  Vibes,
+  Charm,
+  Kaushan_Script,
+  Pinyon_Script
+} from 'next/font/google';
 
-// Phông chữ hệ thống mặc định
+
+// Khai báo các biến phông chữ
+// 1. Phông chữ hỗ trợ 'vietnamese' (Giữ nguyên khai báo subsets)
+const dancingScript = Dancing_Script({ variable: '--font-dancing', subsets: ['vietnamese'], display: 'swap' });
+const lexend = Lexend({ variable: '--font-lexend', subsets: ['vietnamese'], display: 'swap' });
+const pacifico = Pacifico({ variable: '--font-pacifico', subsets: ['vietnamese'], weight: '400', display: 'swap' });
+const lobster = Lobster({ variable: '--font-lobster', subsets: ['vietnamese'], weight: '400', display: 'swap' });
+
+
+// 2. Phông chữ chỉ có 'latin' (Bỏ hoàn toàn tham số subsets để TypeScript không kiểm tra)
+// Chúng ta chấp nhận rủi ro nhỏ về lỗi phông cho 5 phông này
+const arizonia = Arizonia({ variable: '--font-arizonia', weight: '400', display: 'swap' }); 
+const vibes = Vibes({ variable: '--font-vibes', weight: '400', display: 'swap' });
+const charm = Charm({ variable: '--font-charm', weight: '400', display: 'swap' });
+const kaushan = Kaushan_Script({ variable: '--font-kaushan', weight: '400', display: 'swap' });
+const pinyon = Pinyon_Script({ variable: '--font-pinyon', weight: '400', display: 'swap' });
+
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -24,8 +47,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // Thêm class font-serif (mặc định) và biến phông chữ vào thẻ body
-    <html lang="vi" className={`${inter.className} ${dancingScript.variable}`}>
+    <html 
+      lang="vi" 
+      className={`${inter.className} 
+        ${dancingScript.variable} 
+        ${lexend.variable} 
+        ${pacifico.variable}
+        ${lobster.variable}
+        ${arizonia.variable} 
+        ${vibes.variable}
+        ${charm.variable}
+        ${kaushan.variable}
+        ${pinyon.variable}
+      `}
+    >
       <body>{children}</body>
     </html>
   );
