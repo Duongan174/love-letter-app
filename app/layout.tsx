@@ -1,44 +1,11 @@
-// File: app/layout.tsx
+// app/layout.tsx
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-
-// Import 9 phông chữ bạn muốn giữ lại
-import { 
-  Dancing_Script, 
-  Lexend, 
-  Pacifico, 
-  Lobster,
-  Arizonia, 
-  Vibes,
-  Charm,
-  Kaushan_Script,
-  Pinyon_Script
-} from 'next/font/google';
-
-
-// Khai báo các biến phông chữ
-// 1. Phông chữ hỗ trợ 'vietnamese' (Giữ nguyên khai báo subsets)
-const dancingScript = Dancing_Script({ variable: '--font-dancing', subsets: ['vietnamese'], display: 'swap' });
-const lexend = Lexend({ variable: '--font-lexend', subsets: ['vietnamese'], display: 'swap' });
-const pacifico = Pacifico({ variable: '--font-pacifico', subsets: ['vietnamese'], weight: '400', display: 'swap' });
-const lobster = Lobster({ variable: '--font-lobster', subsets: ['vietnamese'], weight: '400', display: 'swap' });
-
-
-// 2. Phông chữ chỉ có 'latin' (Bỏ hoàn toàn tham số subsets để TypeScript không kiểm tra)
-// Chúng ta chấp nhận rủi ro nhỏ về lỗi phông cho 5 phông này
-const arizonia = Arizonia({ variable: '--font-arizonia', weight: '400', display: 'swap' }); 
-const vibes = Vibes({ variable: '--font-vibes', weight: '400', display: 'swap' });
-const charm = Charm({ variable: '--font-charm', weight: '400', display: 'swap' });
-const kaushan = Kaushan_Script({ variable: '--font-kaushan', weight: '400', display: 'swap' });
-const pinyon = Pinyon_Script({ variable: '--font-pinyon', weight: '400', display: 'swap' });
-
-
-const inter = Inter({ subsets: ['latin'] });
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'Vintage E-Card: Thiệp Kỷ Niệm',
-  description: 'Nền tảng tạo và gửi thư tay điện tử mang phong cách hoài cổ.',
+  title: 'Vintage E-Card | Thiệp Kỷ Niệm Online',
+  description: 'Tạo và gửi thiệp điện tử độc đáo với hiệu ứng 3D, nhạc nền và nhiều tùy chỉnh đẹp mắt.',
 };
 
 export default function RootLayout({
@@ -47,21 +14,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html 
-      lang="vi" 
-      className={`${inter.className} 
-        ${dancingScript.variable} 
-        ${lexend.variable} 
-        ${pacifico.variable}
-        ${lobster.variable}
-        ${arizonia.variable} 
-        ${vibes.variable}
-        ${charm.variable}
-        ${kaushan.variable}
-        ${pinyon.variable}
-      `}
-    >
-      <body>{children}</body>
+    <html lang="vi" className="scroll-smooth">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className="antialiased bg-gray-50">
+        <Providers>
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

@@ -8,21 +8,11 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        // Khai báo 12 phông chữ
-        'dancing': ['var(--font-dancing)'], 
-        'lexend': ['var(--font-lexend)'],
-        'arizonia': ['var(--font-arizonia)'], 
-        'pacifico': ['var(--font-pacifico)'],
-        'lobster': ['var(--font-lobster)'],
-        'vibes': ['var(--font-vibes)'],
-        'charm': ['var(--font-charm)'],
-        'kaushan': ['var(--font-kaushan)'],
-        'pinyon': ['var(--font-pinyon)'],
+        dancing: ['Dancing Script', 'cursive'],
+        playfair: ['Playfair Display', 'serif'],
+        lexend: ['Lexend', 'sans-serif'],
       },
     },
   },
-  // Nếu bạn đã cài đặt @tailwindcss/typography trước đó, hãy bật lại dòng này:
-  // plugins: [
-  //   require('@tailwindcss/typography'),
-  // ],
+  plugins: [],
 }

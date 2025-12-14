@@ -1,112 +1,194 @@
-"use client";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
-import Envelope from "@/components/Envelope";
-import { Loader2 } from "lucide-react";
+'use client';
 
-export default function CardViewer() {
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, Music, Volume2, VolumeX, Share2, RotateCcw } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import EnvelopeAnimation from '@/components/card/EnvelopeAnimation';
+import CardContent from '@/components/card/CardContent';
+
+interface CardData {
+  id: string;
+  recipient_name: string;
+  sender_name: string;
+  message: string;
+  font_style: string;
+  text_effect: string;
+  photos: string[];
+  signature_url: string | null;
+  envelope_color: string;
+  stamp_image: string;
+  music_url: string | null;
+  template_id: string;
+  view_count: number;
+}
+
+export default function CardViewPage() {
   const params = useParams();
-  const [cardData, setCardData] = useState<any>(null);
+  const [card, setCard] = useState<CardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showContent, setShowContent] = useState(false);
+  const [isOpened, setIsOpened] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCard = async () => {
       if (!params.id) return;
-      const { data } = await supabase
+
+      const { data, error } = await supabase
         .from('cards')
         .select('*')
         .eq('id', params.id)
         .single();
-      setCardData(data);
+
+      if (error || !data) {
+        setError('Không tìm thấy thiệp');
+        setLoading(false);
+        return;
+      }
+
+      setCard(data);
       setLoading(false);
+
+      // Increment view count
+      await supabase.rpc('increment_view_count', { card_id: params.id });
     };
+
     fetchCard();
   }, [params.id]);
 
-  if (loading) return (
-    <div className="h-screen w-full flex items-center justify-center bg-[#2c2c2c] text-white">
-      <Loader2 className="animate-spin w-10 h-10" />
-    </div>
-  );
+  const handleOpenEnvelope = () => {
+    setIsOpened(true);
+    setIsMuted(false);
+  };
 
-  if (!cardData) return (
-    <div className="h-screen w-full flex items-center justify-center bg-[#2c2c2c] text-white flex-col gap-4">
-      <h1 className="text-4xl font-bold">404</h1>
-      <p>Thư này đã bị thất lạc...</p>
-    </div>
-  );
+  const handleReplay = () => {
+    setIsOpened(false);
+    setIsMuted(true);
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      await navigator.share({ title: 'Thiệp yêu thương', url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      alert('Đã copy link!');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-100 to-pink-100">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        >
+          <Heart className="w-12 h-12 text-rose-500" fill="currentColor" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (error || !card) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-100 to-pink-100">
+        <div className="text-center">
+          <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Không tìm thấy thiệp</h1>
+          <p className="text-gray-600">Thiệp không tồn tại hoặc đã bị xóa</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className="min-h-screen w-full bg-[#2c2c2c] flex items-center justify-center relative overflow-hidden font-serif">
-      
-      {/* PHẦN 1: PHONG BÌ */}
-      <div 
-        className={`transition-all duration-1000 absolute inset-0 flex flex-col items-center justify-center z-20 
-        ${showContent ? 'opacity-0 scale-150 pointer-events-none' : 'opacity-100 scale-100'}`}
-      >
-         <Envelope 
-            config={{
-               recipientName: cardData.recipient_name,
-               envelopeColor: cardData.envelope_color,
-               waxColor: cardData.wax_color,
-               music: cardData.music,
-               isPreview: false
+    <main className="min-h-screen bg-gradient-to-br from-rose-100 via-pink-50 to-purple-100 relative overflow-hidden">
+      {/* Floating Hearts Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {[...Array(15)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute text-rose-200"
+            initial={{ 
+              x: Math.random() * window.innerWidth, 
+              y: window.innerHeight + 50 
             }}
-            onOpen={() => setShowContent(true)}
-         />
-         {!showContent && (
-            <div className="text-white/50 text-center mt-4 animate-pulse text-sm tracking-widest uppercase">
-               Chạm vào phong bì để mở
-            </div>
-         )}
+            animate={{ 
+              y: -50,
+              x: Math.random() * window.innerWidth 
+            }}
+            transition={{ 
+              duration: 10 + Math.random() * 10,
+              repeat: Infinity,
+              delay: Math.random() * 5 
+            }}
+          >
+            <Heart className="w-6 h-6" fill="currentColor" />
+          </motion.div>
+        ))}
       </div>
 
-      {/* PHẦN 2: CUỐN SỔ KỶ NIỆM */}
-      <div 
-        className={`transition-all duration-1000 transform z-10 
-        ${showContent ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-20 scale-90'}`}
-      >
-        <div className="bg-[#fdfbf7] w-[95vw] md:w-[900px] h-[85vh] md:h-[600px] shadow-2xl rounded-lg flex flex-col md:flex-row overflow-hidden relative border border-gray-300">
-           
-           {/* TRANG TRÁI: Ảnh */}
-           <div className="w-full md:w-1/2 bg-[#eceff1] p-6 overflow-y-auto border-r border-gray-300 relative">
-              <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-8 bg-red-800 rounded-b z-10 shadow-md"></div>
-              {cardData.image_urls && cardData.image_urls.length > 0 ? (
-                 <div className="flex flex-col gap-6 pt-4 pb-10">
-                    {cardData.image_urls.map((img:string, i:number) => (
-                       <div key={i} className={`bg-white p-3 shadow-lg transform transition hover:scale-105 hover:z-10 duration-300 ${i % 2 === 0 ? 'rotate-2' : '-rotate-2'}`}>
-                          <img src={img} className="w-full h-auto object-cover rounded-sm border border-gray-100" />
-                       </div>
-                    ))}
-                 </div>
-              ) : (
-                 <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-                    <p className="text-sm italic">Không có ảnh đính kèm</p>
-                 </div>
-              )}
-           </div>
+      {/* Music Player */}
+      {card.music_url && (
+        <audio
+          src={card.music_url}
+          autoPlay={!isMuted && isOpened}
+          loop
+          muted={isMuted}
+        />
+      )}
 
-           {/* TRANG PHẢI: Lời chúc */}
-           <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col relative bg-[url('https://www.transparenttextures.com/patterns/paper.png')]">
-              <div className="absolute top-4 right-6 text-8xl font-serif text-gray-200 select-none">❞</div>
-              <div className="mt-6 z-10">
-                  <p className="text-gray-500 text-xs mb-8 uppercase tracking-[0.2em] border-b border-gray-300 pb-2 inline-block">
-                    Gửi đến {cardData.recipient_name}
-                  </p>
-                  
-                  {/* DÒNG QUAN TRỌNG: Thêm class font-handwriting để áp dụng phông chữ mới */}
-                  <div className="font-handwriting text-gray-800 text-3xl md:text-4xl leading-relaxed whitespace-pre-line font-medium">
-                     {cardData.content}
-                  </div>
-              </div>
-              <div className="mt-auto pt-8 border-t border-gray-300 flex justify-between items-center text-gray-400 text-xs">
-                  <span>{new Date(cardData.created_at).toLocaleDateString('vi-VN')}</span>
-                  <span className="italic">Vintage E-Card</span>
-              </div>
-           </div>
-        </div>
+      {/* Controls */}
+      <div className="fixed top-4 right-4 z-50 flex gap-2">
+        {card.music_url && (
+          <button
+            onClick={() => setIsMuted(!isMuted)}
+            className="w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center shadow-lg hover:bg-white transition"
+          >
+            {isMuted ? <VolumeX className="w-5 h-5 text-gray-600" /> : <Volume2 className="w-5 h-5 text-rose-500" />}
+          </button>
+        )}
+        <button
+          onClick={handleShare}
+          className="w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center shadow-lg hover:bg-white transition"
+        >
+          <Share2 className="w-5 h-5 text-gray-600" />
+        </button>
+        {isOpened && (
+          <button
+            onClick={handleReplay}
+            className="w-10 h-10 bg-white/80 backdrop-blur rounded-full flex items-center justify-center shadow-lg hover:bg-white transition"
+          >
+            <RotateCcw className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <AnimatePresence mode="wait">
+          {!isOpened ? (
+            <EnvelopeAnimation
+              key="envelope"
+              color={card.envelope_color}
+              stamp={card.stamp_image}
+              recipientName={card.recipient_name}
+              onOpen={handleOpenEnvelope}
+            />
+          ) : (
+            <CardContent
+              key="card"
+              card={card}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* View Count */}
+      <div className="fixed bottom-4 left-4 text-sm text-gray-400">
+        👁 {card.view_count || 0} lượt xem
       </div>
     </main>
   );

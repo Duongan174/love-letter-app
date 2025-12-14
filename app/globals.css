@@ -1,3 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom styles */
+.gradient-text {
+  @apply bg-gradient-to-r from-rose-500 via-pink-500 to-purple-500 bg-clip-text text-transparent;
+}
+
+.glass {
+  @apply bg-white/80 backdrop-blur-xl;
+}
+
+.font-dancing {
+  font-family: 'Dancing Script', cursive;
+}
+
+.font-playfair {
+  font-family: 'Playfair Display', serif;
+}
+
+.font-lexend {
+  font-family: 'Lexend', sans-serif;
+}
