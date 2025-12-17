@@ -5,24 +5,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
+    // Chỉ lấy các trường cần thiết, bỏ qua các ID không hợp lệ
     const { data, error } = await supabase
       .from('cards')
       .insert([{
         user_id: body.user_id,
         recipient_name: body.recipient_name,
-        recipient_email: body.recipient_email || null,
         sender_name: body.sender_name,
         content: body.message,
         font_style: body.font_style || 'dancing',
         text_effect: body.text_effect || 'none',
         photos: body.photos || [],
         signature_data: body.signature_data || null,
-        signature_url: body.signature_url || null,
-        envelope_id: body.envelope_id || null,
         envelope_color: body.envelope_color || '#f8b4c4',
-        stamp_id: body.stamp_id || null,
-        music_id: body.music_id || null,
         view_count: 0,
+        status: 'sent',
       }])
       .select()
       .single();

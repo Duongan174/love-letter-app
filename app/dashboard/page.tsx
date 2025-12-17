@@ -1,4 +1,3 @@
-// app/dashboard/page.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,12 +8,47 @@ import {
   LogOut, Settings, Copy, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../providers';
-import { db } from '@/lib/supabase';
-import { formatDate, generateShareLink, copyToClipboard, formatPoints } from '@/lib/utils';
-import { Card } from '@/types';
+import { supabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
 import Loading from '@/components/ui/Loading';
 import Modal from '@/components/ui/Modal';
+
+interface Card {
+  id: string;
+  recipient_name: string;
+  sender_name: string;
+  view_count: number;
+  status: string;
+  created_at: string;
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric'
+  });
+};
+
+const formatPoints = (points: number) => {
+  return points?.toLocaleString() || '0';
+};
+
+const generateShareLink = (cardId: string) => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/card/${cardId}`;
+  }
+  return `/card/${cardId}`;
+};
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export default function DashboardPage() {
   const { user, loading: authLoading, signOut, refreshUser } = useAuth();
@@ -24,6 +58,7 @@ export default function DashboardPage() {
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoModal, setPromoModal] = useState(false);
+  const [promoMessage, setPromoMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,7 +76,11 @@ export default function DashboardPage() {
   const loadCards = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await db.getUserCards(user.id);
+    const { data } = await supabase
+      .from('cards')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
     if (data) setCards(data);
     setLoading(false);
   };
@@ -59,29 +98,48 @@ export default function DashboardPage() {
     if (!promoCode.trim() || !user) return;
     
     setPromoLoading(true);
-    const { valid, data, error } = await db.validatePromoCode(promoCode.trim().toUpperCase());
-    
-    if (!valid) {
-      alert(error || 'Mã không hợp lệ');
+    setPromoMessage(null);
+
+    try {
+      const response = await fetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          code: promoCode.trim().toUpperCase(), 
+          user_id: user.id 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPromoMessage({ type: 'success', text: `Thành công! Bạn nhận được ${data.tym_received} Tym` });
+        setPromoCode('');
+        if (refreshUser) {
+          await refreshUser();
+        }
+        setTimeout(() => {
+          setPromoModal(false);
+          setPromoMessage(null);
+        }, 2000);
+      } else {
+        setPromoMessage({ type: 'error', text: data.error || 'Mã không hợp lệ' });
+      }
+    } catch (error) {
+      setPromoMessage({ type: 'error', text: 'Có lỗi xảy ra. Vui lòng thử lại.' });
+    } finally {
       setPromoLoading(false);
-      return;
     }
-
-    if (data) {
-      await db.usePromoCode(data.id, user.id);
-      await refreshUser();
-      alert(`Thành công! Bạn nhận được ${data.points} điểm`);
-      setPromoCode('');
-      setPromoModal(false);
-    }
-    
-    setPromoLoading(false);
   };
 
-  const handleSignOut = async () => {
+ const handleSignOut = async () => {
+  try {
     await signOut();
-    router.push('/');
-  };
+  } catch (e) {
+    console.error('Sign out error:', e);
+  }
+  window.location.href = '/';
+};
 
   if (authLoading || !user) {
     return <Loading />;
@@ -108,7 +166,7 @@ export default function DashboardPage() {
               >
                 <Gift className="w-4 h-4 text-amber-600" />
                 <span className="font-bold text-amber-700">{formatPoints(user.points)}</span>
-                <span className="text-amber-600 text-sm">điểm</span>
+                <span className="text-amber-600 text-sm">Tym</span>
               </button>
 
               {/* Avatar dropdown */}
@@ -118,7 +176,7 @@ export default function DashboardPage() {
                     <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-full border-2 border-rose-200" />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-gradient-to-r from-rose-400 to-pink-400 flex items-center justify-center text-white font-bold">
-                      {user.name.charAt(0).toUpperCase()}
+                      {user.name?.charAt(0).toUpperCase()}
                     </div>
                   )}
                 </button>
@@ -171,7 +229,7 @@ export default function DashboardPage() {
             { icon: Mail, label: 'Tổng thiệp', value: cards.length, color: 'text-rose-500', bg: 'bg-rose-100' },
             { icon: Eye, label: 'Lượt xem', value: cards.reduce((sum, c) => sum + (c.view_count || 0), 0), color: 'text-purple-500', bg: 'bg-purple-100' },
             { icon: Clock, label: 'Đã gửi', value: cards.filter(c => c.status === 'sent' || c.status === 'viewed').length, color: 'text-blue-500', bg: 'bg-blue-100' },
-            { icon: Gift, label: 'Điểm hiện có', value: user.points, color: 'text-amber-500', bg: 'bg-amber-100' },
+            { icon: Gift, label: 'Tym hiện có', value: user.points, color: 'text-amber-500', bg: 'bg-amber-100' },
           ].map((stat, i) => (
             <motion.div
               key={i}
@@ -309,18 +367,29 @@ export default function DashboardPage() {
       </div>
 
       {/* Promo Code Modal */}
-      <Modal isOpen={promoModal} onClose={() => setPromoModal(false)} title="Nhập mã khuyến mãi">
+      <Modal isOpen={promoModal} onClose={() => { setPromoModal(false); setPromoMessage(null); }} title="Nhập mã khuyến mãi">
         <div className="space-y-4">
           <p className="text-gray-600">
-            Nhập mã để nhận thêm điểm sử dụng các tính năng premium!
+            Nhập mã để nhận thêm Tym sử dụng các tính năng premium!
           </p>
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-            placeholder="VD: WELCOME100"
+            placeholder="VD: WELCOME2024"
             className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 text-center text-lg font-mono uppercase"
           />
+          
+          {promoMessage && (
+            <div className={`p-3 rounded-xl text-center font-medium ${
+              promoMessage.type === 'success' 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-red-100 text-red-700'
+            }`}>
+              {promoMessage.text}
+            </div>
+          )}
+
           <Button
             onClick={handleRedeemCode}
             loading={promoLoading}
