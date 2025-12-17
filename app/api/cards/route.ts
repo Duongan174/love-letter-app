@@ -12,12 +12,12 @@ export async function POST(request: NextRequest) {
         recipient_name: body.recipient_name,
         recipient_email: body.recipient_email || null,
         sender_name: body.sender_name,
-        content: body.message,  // Lưu ý: cột là "content" không phải "message"
+        content: body.message,
         font_style: body.font_style || 'dancing',
         text_effect: body.text_effect || 'none',
         photos: body.photos || [],
-        signature_data: body.signature_data,
-        signature_url: body.signature_url,
+        signature_data: body.signature_data || null,
+        signature_url: body.signature_url || null,
         envelope_id: body.envelope_id || null,
         envelope_color: body.envelope_color || '#f8b4c4',
         stamp_id: body.stamp_id || null,
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Trừ Tym nếu có chi phí
+    // Trừ Tym
     if (body.tym_cost > 0 && body.user_id) {
       const { data: userData } = await supabase
         .from('users')
