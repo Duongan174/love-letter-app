@@ -15,8 +15,13 @@ export async function POST(request: NextRequest) {
       .eq('code', code.toUpperCase().trim())
       .single();
 
-    if (promoError || !promo) {
-      return NextResponse.json({ error: 'Mã không tồn tại' }, { status: 404 });
+    if (promoError) {
+      console.error('Promo lookup error:', promoError);
+      return NextResponse.json({ error: 'Không thể kiểm tra mã khuyến mãi' }, { status: 500 });
+    }
+
+    if (!promo) {
+      return NextResponse.json({ error: 'Mã không tồn tại' }, { status: 400 });
     }
 
     if (!promo.is_active) {

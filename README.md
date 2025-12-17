@@ -31,6 +31,35 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+You can deploy this app for free on [Vercel](https://vercel.com/). The only requirements are a Vercel account and the environment variables listed below.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Required environment variables
+
+Add these to a `.env.local` file during local development and to **Project Settings → Environment Variables** in Vercel before deploying:
+
+| Variable | Description |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL (Project Settings → API). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous public API key. |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for client-side uploads. |
+| `CLOUDINARY_API_KEY` | Cloudinary API key (used server-side). |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret (server-side). |
+
+If you use other Supabase tables or services, ensure the anon key has access to them or set up additional service keys as needed.
+
+### One-click deploy via Vercel dashboard
+
+1) Push your code to GitHub, GitLab, or Bitbucket.
+2) In the [Vercel dashboard](https://vercel.com/new), import the repository and pick the `work` branch (or your main branch).
+3) Set the environment variables above in **Project Settings → Environment Variables**.
+4) Keep the default **Framework Preset: Next.js**, **Build Command: `npm run build`**, and **Output Directory: `.next`**.
+5) Click **Deploy**. Vercel will build the app and provide a production URL when finished.
+
+### Deploy with Vercel CLI (optional)
+
+1) Install the CLI locally: `npm i -g vercel`.
+2) Log in: `vercel login`.
+3) From the project root, run `vercel` to create the project and set environment variables when prompted.
+4) Run `vercel --prod` to trigger a production deployment at any time.
+
+For more details, see the [Next.js deployment guide](https://nextjs.org/docs/app/building-your-application/deploying).
