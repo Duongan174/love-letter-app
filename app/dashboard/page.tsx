@@ -6,23 +6,22 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, Plus, Clock, Eye, Send, 
-  LogOut, Settings, Copy, ExternalLink, 
-  Search, Calendar, Trash2, MoreVertical,
-  Sparkles,
-  LayoutDashboard
+  Copy, ExternalLink, Search, Calendar, 
+  Trash2, Sparkles, LayoutDashboard, 
+  Feather, Crown, Mail
 } from 'lucide-react';
 import Link from 'next/link';
 
-// 👇 FIX LỖI IMPORT Ở ĐÂY
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 
-// Components
 import Button from '@/components/ui/Button';
 import Loading from '@/components/ui/Loading';
-import Header from '@/components/layout/Header'; // Dùng Header chung
+import Header from '@/components/layout/Header';
 
-// Types
+// ═══════════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════════
 interface Card {
   id: string;
   recipient_name: string;
@@ -33,6 +32,20 @@ interface Card {
   envelope_color?: string;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DECORATIVE COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+const OrnamentDivider = ({ className = '' }: { className?: string }) => (
+  <div className={`flex items-center gap-3 ${className}`}>
+    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
+    <Feather className="w-4 h-4 text-gold/60" />
+    <div className="flex-1 h-px bg-gradient-to-l from-transparent via-gold/50 to-transparent" />
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -42,7 +55,9 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Fetch data
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FETCH DATA
+  // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchCards = async () => {
       if (!user) return;
@@ -70,7 +85,9 @@ export default function Dashboard() {
     }
   }, [user, authLoading, router]);
 
-  // Xử lý copy link
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────────
   const handleCopyLink = (cardId: string) => {
     const link = `${window.location.origin}/card/${cardId}`;
     navigator.clipboard.writeText(link);
@@ -78,235 +95,367 @@ export default function Dashboard() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Lọc thiệp theo tìm kiếm
+  // ─────────────────────────────────────────────────────────────────────────────
+  // COMPUTED VALUES
+  // ─────────────────────────────────────────────────────────────────────────────
   const filteredCards = cards.filter(card => 
     card.recipient_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Tính toán thống kê
   const stats = [
     { 
       label: 'Tổng thiệp đã tạo', 
       value: cards.length, 
       icon: Send, 
-      color: 'text-blue-500', 
-      bg: 'bg-blue-50' 
+      color: 'text-forest', 
+      bg: 'bg-forest/10',
+      border: 'border-forest/20'
     },
     { 
       label: 'Lượt xem', 
       value: cards.reduce((acc, curr) => acc + (curr.view_count || 0), 0), 
       icon: Eye, 
-      color: 'text-purple-500', 
-      bg: 'bg-purple-50' 
+      color: 'text-gold-600', 
+      bg: 'bg-gold/10',
+      border: 'border-gold/20'
     },
     { 
       label: 'Số Tym hiện có', 
       value: user?.points || 0, 
       icon: Heart, 
-      color: 'text-rose-500', 
-      bg: 'bg-rose-50' 
+      color: 'text-burgundy', 
+      bg: 'bg-burgundy/10',
+      border: 'border-burgundy/20'
     },
   ];
 
-  if (authLoading || loading) return <Loading />;
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'viewed':
+        return { 
+          label: 'Đã xem', 
+          className: 'bg-forest/10 text-forest border-forest/30' 
+        };
+      case 'sent':
+        return { 
+          label: 'Đã gửi', 
+          className: 'bg-gold/10 text-gold-600 border-gold/30' 
+        };
+      default:
+        return { 
+          label: 'Nháp', 
+          className: 'bg-ink/5 text-ink/60 border-ink/20' 
+        };
+    }
+  };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // LOADING & AUTH STATES
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (authLoading || loading) return <Loading />;
   if (!user) return null;
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 1. Sử dụng Header chung của Echo */}
+    <div className="min-h-screen bg-cream pb-20">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         
-        {/* Welcome Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        {/* ═══════════════════════════════════════════════════════════════════
+            WELCOME SECTION
+        ════════════════════════════════════════════════════════════════════ */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10"
+        >
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <LayoutDashboard className="w-8 h-8 text-rose-500" />
-              Tổng quan
-            </h1>
-            <p className="text-gray-500 mt-1">Chào mừng <span className="font-semibold text-gray-900">{user.name}</span> quay trở lại!</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-full bg-burgundy flex items-center justify-center">
+                <LayoutDashboard className="w-6 h-6 text-gold" />
+              </div>
+              <div>
+                <h1 className="font-display text-3xl md:text-4xl font-bold text-ink">
+                  Tổng quan
+                </h1>
+                <p className="font-body text-ink/60">
+                  Chào mừng <span className="font-semibold text-burgundy">{user.name}</span> quay trở lại!
+                </p>
+              </div>
+            </div>
           </div>
+          
           <Link href="/create">
-            <Button icon={<Plus className="w-5 h-5" />} className="shadow-lg shadow-rose-200">
+            <Button 
+              variant="primary" 
+              size="lg" 
+              icon={<Plus className="w-5 h-5" />}
+            >
               Tạo Thiệp Mới
             </Button>
           </Link>
-        </div>
+        </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {/* ═══════════════════════════════════════════════════════════════════
+            STATS GRID
+        ════════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {stats.map((stat, index) => (
             <motion.div
               key={index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              className={`
+                relative p-6 bg-cream-light border ${stat.border} rounded-soft
+                shadow-vintage hover:shadow-elevated transition-all duration-300
+                overflow-hidden group
+              `}
             >
+              {/* Decorative corner */}
+              <div className="absolute top-2 right-2 text-gold/20 font-serif text-lg">✦</div>
+              
               <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                <div className={`w-14 h-14 rounded-full ${stat.bg} border ${stat.border} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <stat.icon className={`w-7 h-7 ${stat.color}`} />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="font-elegant text-sm text-ink/60 mb-1">{stat.label}</p>
+                  <p className="font-display text-3xl font-bold text-ink">{stat.value}</p>
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
 
-        {/* Filters & Search */}
-        <div className="bg-white rounded-t-3xl border-b border-gray-100 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm mt-4">
-          <h2 className="text-xl font-bold text-gray-900">Danh sách thiệp</h2>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Tìm theo tên người nhận..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition"
-            />
-          </div>
-        </div>
-
-        {/* Cards List */}
-        <div className="bg-white rounded-b-3xl shadow-sm min-h-[400px]">
-          {filteredCards.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-100">
-                    <th className="px-6 py-4 font-semibold">Người nhận</th>
-                    <th className="px-6 py-4 font-semibold">Trạng thái</th>
-                    <th className="px-6 py-4 font-semibold text-center">Lượt xem</th>
-                    <th className="px-6 py-4 font-semibold">Ngày tạo</th>
-                    <th className="px-6 py-4 font-semibold text-right">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredCards.map((card) => (
-                    <motion.tr 
-                      key={card.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="group hover:bg-rose-50/30 transition-colors"
-                    >
-                      {/* Cột 1: Người nhận & Message preview */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-100 to-pink-200 flex items-center justify-center text-rose-500">
-                             <Heart className="w-5 h-5" fill="currentColor" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{card.recipient_name}</p>
-                            <p className="text-xs text-gray-500 truncate max-w-[150px]">
-                              {card.message || "Gửi lời yêu thương..."}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Cột 2: Trạng thái */}
-                      <td className="px-6 py-4">
-                        <span className={`
-                          inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                          ${card.view_count > 0 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-yellow-100 text-yellow-700'
-                          }
-                        `}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${card.view_count > 0 ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                          {card.view_count > 0 ? 'Đã xem' : 'Đã gửi'}
-                        </span>
-                      </td>
-
-                      {/* Cột 3: Lượt xem */}
-                      <td className="px-6 py-4 text-center">
-                        <div className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-lg text-sm text-gray-600 font-medium">
-                          <Eye className="w-3.5 h-3.5" />
-                          {card.view_count}
-                        </div>
-                      </td>
-
-                      {/* Cột 4: Ngày tạo */}
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          {new Date(card.created_at).toLocaleDateString('vi-VN')}
-                        </div>
-                      </td>
-
-                      {/* Cột 5: Hành động */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Nút Copy Link */}
-                          <button 
-                            onClick={() => handleCopyLink(card.id)}
-                            className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all relative group/btn"
-                            title="Sao chép liên kết"
-                          >
-                            {copiedId === card.id ? (
-                              <Sparkles className="w-4 h-4 text-amber-500" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                            {copiedId === card.id && (
-                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                                Đã copy!
-                              </span>
-                            )}
-                          </button>
-
-                          {/* Nút Xem Card */}
-                          <Link 
-                            href={`/card/${card.id}`}
-                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Xem thiệp"
-                            target="_blank"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Link>
-                          
-                          {/* Nút Xóa (Demo UI) */}
-                          <button className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            // Empty State
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                <Heart className="w-10 h-10 text-rose-300" />
+        {/* ═══════════════════════════════════════════════════════════════════
+            CARDS LIST SECTION
+        ════════════════════════════════════════════════════════════════════ */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-cream-light border border-gold/20 rounded-soft shadow-vintage overflow-hidden"
+        >
+          {/* Header */}
+          <div className="p-6 border-b border-gold/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Mail className="w-5 h-5 text-burgundy" />
+                <h2 className="font-display text-xl font-semibold text-ink">
+                  Danh sách thiệp
+                </h2>
+                <span className="px-2 py-0.5 bg-burgundy/10 text-burgundy text-sm rounded-full font-elegant">
+                  {cards.length}
+                </span>
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Chưa có thiệp nào</h3>
-              <p className="text-gray-500 max-w-md mb-8">
-                Bạn chưa tạo tấm thiệp nào cả. Hãy bắt đầu gửi yêu thương ngay hôm nay nhé!
-              </p>
-              <Link href="/create">
-                <Button size="lg" icon={<Sparkles className="w-5 h-5" />}>
-                  Tạo thiệp đầu tiên
-                </Button>
-              </Link>
+              
+              {/* Search */}
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/40" />
+                <input 
+                  type="text" 
+                  placeholder="Tìm theo tên người nhận..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="input-vintage pl-10 py-2"
+                />
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+
+          {/* Content */}
+          <div className="min-h-[400px]">
+            {filteredCards.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gold/20 bg-cream/50">
+                      <th className="px-6 py-4 text-left font-display text-sm font-medium text-ink/70 uppercase tracking-wider">
+                        Người nhận
+                      </th>
+                      <th className="px-6 py-4 text-left font-display text-sm font-medium text-ink/70 uppercase tracking-wider hidden md:table-cell">
+                        Ngày tạo
+                      </th>
+                      <th className="px-6 py-4 text-center font-display text-sm font-medium text-ink/70 uppercase tracking-wider">
+                        Lượt xem
+                      </th>
+                      <th className="px-6 py-4 text-center font-display text-sm font-medium text-ink/70 uppercase tracking-wider">
+                        Trạng thái
+                      </th>
+                      <th className="px-6 py-4 text-right font-display text-sm font-medium text-ink/70 uppercase tracking-wider">
+                        Thao tác
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gold/10">
+                    {filteredCards.map((card, index) => {
+                      const statusConfig = getStatusConfig(card.status);
+                      return (
+                        <motion.tr
+                          key={card.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="group hover:bg-burgundy-50/50 transition-colors"
+                        >
+                          {/* Recipient */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div 
+                                className="w-10 h-10 rounded-full flex items-center justify-center border-2 border-gold/30"
+                                style={{ backgroundColor: card.envelope_color || '#722F37' }}
+                              >
+                                <Heart className="w-4 h-4 text-gold" fill="currentColor" />
+                              </div>
+                              <div>
+                                <p className="font-display font-medium text-ink">
+                                  {card.recipient_name || 'Chưa đặt tên'}
+                                </p>
+                                <p className="font-body text-sm text-ink/50 truncate max-w-[200px]">
+                                  {card.message || 'Chưa có lời nhắn'}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          
+                          {/* Date */}
+                          <td className="px-6 py-4 hidden md:table-cell">
+                            <div className="flex items-center gap-2 text-ink/60 font-elegant">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(card.created_at).toLocaleDateString('vi-VN')}
+                            </div>
+                          </td>
+                          
+                          {/* Views */}
+                          <td className="px-6 py-4 text-center">
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gold/10 rounded-full">
+                              <Eye className="w-4 h-4 text-gold-600" />
+                              <span className="font-display font-semibold text-gold-600">
+                                {card.view_count || 0}
+                              </span>
+                            </div>
+                          </td>
+                          
+                          {/* Status */}
+                          <td className="px-6 py-4 text-center">
+                            <span className={`
+                              inline-flex items-center px-3 py-1 rounded-full text-sm font-elegant border
+                              ${statusConfig.className}
+                            `}>
+                              {statusConfig.label}
+                            </span>
+                          </td>
+                          
+                          {/* Actions */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              {/* Copy Link */}
+                              <button
+                                onClick={() => handleCopyLink(card.id)}
+                                className={`
+                                  relative p-2 rounded-vintage transition-all
+                                  ${copiedId === card.id 
+                                    ? 'bg-forest/10 text-forest' 
+                                    : 'text-ink/40 hover:text-gold hover:bg-gold/10'
+                                  }
+                                `}
+                                title="Copy link"
+                              >
+                                {copiedId === card.id ? (
+                                  <Sparkles className="w-4 h-4" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
+                                
+                                {/* Tooltip */}
+                                <AnimatePresence>
+                                  {copiedId === card.id && (
+                                    <motion.span
+                                      initial={{ opacity: 0, y: 5 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: 5 }}
+                                      className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-ink text-cream-light text-xs rounded shadow-lg whitespace-nowrap"
+                                    >
+                                      Đã copy!
+                                    </motion.span>
+                                  )}
+                                </AnimatePresence>
+                              </button>
+
+                              {/* View Card */}
+                              <Link 
+                                href={`/card/${card.id}`}
+                                className="p-2 text-ink/40 hover:text-forest hover:bg-forest/10 rounded-vintage transition-all"
+                                title="Xem thiệp"
+                                target="_blank"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Link>
+                              
+                              {/* Delete */}
+                              <button 
+                                className="p-2 text-ink/40 hover:text-red-600 hover:bg-red-50 rounded-vintage transition-all"
+                                title="Xóa"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              /* ═══════════════════════════════════════════════════════════════
+                  EMPTY STATE
+              ════════════════════════════════════════════════════════════════ */
+              <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="w-24 h-24 rounded-full bg-burgundy/10 border-2 border-burgundy/20 flex items-center justify-center mb-6"
+                >
+                  <Heart className="w-12 h-12 text-burgundy/50" />
+                </motion.div>
+                
+                <h3 className="font-display text-2xl font-semibold text-ink mb-3">
+                  Chưa có thiệp nào
+                </h3>
+                
+                <OrnamentDivider className="max-w-[200px] mb-4" />
+                
+                <p className="font-body text-ink/60 max-w-md mb-8">
+                  Bạn chưa tạo tấm thiệp nào cả. Hãy bắt đầu gửi yêu thương ngay hôm nay nhé!
+                </p>
+                
+                <Link href="/create">
+                  <Button 
+                    variant="primary" 
+                    size="lg" 
+                    icon={<Sparkles className="w-5 h-5" />}
+                  >
+                    Tạo thiệp đầu tiên
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        </motion.div>
       </main>
 
-      {/* Decorative footer text */}
-      <div className="text-center mt-12 pb-8">
-        <p className="text-gray-400 text-sm flex items-center justify-center gap-2">
+      {/* ═══════════════════════════════════════════════════════════════════════
+          FOOTER
+      ════════════════════════════════════════════════════════════════════════ */}
+      <div className="text-center mt-16 pb-8">
+        <p className="font-elegant text-ink/40 text-sm flex items-center justify-center gap-2">
           <span>Được làm với</span>
-          <Heart className="w-3 h-3 text-rose-400 fill-current" />
+          <Heart className="w-3 h-3 text-burgundy" fill="currentColor" />
           <span>bởi Echo Team</span>
         </p>
       </div>

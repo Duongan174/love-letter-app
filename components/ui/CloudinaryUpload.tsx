@@ -1,155 +1,98 @@
+// components/ui/CloudinaryUpload.tsx
 'use client';
 
-import { useState, useRef } from 'react';
-import { Upload, X, Loader2, Image as ImageIcon, Music } from 'lucide-react';
+import { useState } from 'react';
+import { Upload, Loader2, X, Image as ImageIcon } from 'lucide-react';
 
 interface CloudinaryUploadProps {
-  onUpload: (url: string) => void;
-  folder?: string;
-  accept?: string;
-  maxSize?: number;
-  type?: 'image' | 'audio' | 'any';
-  className?: string;
-  preview?: boolean;
-  currentUrl?: string;
+  onUpload: (url: string) => void; // Hàm trả về URL sau khi up xong
+  currentUrl?: string; // URL hiện tại (nếu đang sửa)
+  label?: string;
 }
 
-export default function CloudinaryUpload({
-  onUpload,
-  folder = 'vintage-ecard',
-  accept = 'image/*',
-  maxSize = 25,
-  type = 'image',
-  className = '',
-  preview = true,
-  currentUrl,
-}: CloudinaryUploadProps) {
+export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh bìa" }: CloudinaryUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl || null);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(currentUrl || '');
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > maxSize * 1024 * 1024) {
-      setError(`File quá lớn. Tối đa ${maxSize}MB`);
-      return;
-    }
-
-    setError(null);
-    setUploading(true);
-
-    if (type === 'image' && preview) {
-      const reader = new FileReader();
-      reader.onload = (e) => setPreviewUrl(e.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-
     try {
+      setUploading(true); // Bắt đầu quay
+
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('folder', folder);
+      formData.append('folder', 'vintage-ecard/templates'); // Folder trên Cloudinary
 
-      const response = await fetch('/api/upload', {
+      // Gọi API
+      const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (!res.ok) throw new Error(data.error || 'Lỗi upload');
 
+      // Upload xong -> Hiện ảnh & Trả về URL
+      setPreview(data.url);
       onUpload(data.url);
-      setPreviewUrl(data.url);
-    } catch (err) {
-      setError('Upload thất bại. Vui lòng thử lại.');
-      setPreviewUrl(null);
+      
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Upload thất bại! Hãy kiểm tra lại file .env.local');
     } finally {
-      setUploading(false);
+      setUploading(false); // Dừng quay dù thành công hay thất bại
     }
   };
 
-  const clearPreview = () => {
-    setPreviewUrl(null);
-    setError(null);
+  const handleRemove = () => {
+    setPreview('');
     onUpload('');
-    if (inputRef.current) {
-      inputRef.current.value = '';
-    }
   };
-
-  const inputId = `cloudinary-upload-${Math.random().toString(36).substr(2, 9)}`;
 
   return (
-    <div className={className}>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        onChange={handleFileChange}
-        className="hidden"
-        id={inputId}
-      />
-
-      {previewUrl && preview ? (
-        <div className="relative">
-          {type === 'image' ? (
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="w-full h-48 object-cover rounded-xl"
-            />
-          ) : (
-            <div className="w-full h-24 bg-gray-100 rounded-xl flex items-center justify-center">
-              <Music className="w-8 h-8 text-gray-400" />
-              <span className="ml-2 text-sm text-gray-600 truncate max-w-[200px]">
-                {previewUrl.split('/').pop()}
-              </span>
-            </div>
-          )}
+    <div className="w-full">
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      
+      {preview ? (
+        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-200 group">
+          <img src={preview} alt="Preview" className="w-full h-full object-cover" />
           <button
+            onClick={handleRemove}
             type="button"
-            onClick={clearPreview}
-            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       ) : (
-        <label
-          htmlFor={inputId}
-          className={`
-            flex flex-col items-center justify-center w-full h-48 
-            border-2 border-dashed border-gray-300 rounded-xl 
-            cursor-pointer hover:border-rose-400 hover:bg-rose-50/50 transition
-            ${uploading ? 'pointer-events-none opacity-50' : ''}
-          `}
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="w-10 h-10 text-rose-500 animate-spin mb-2" />
-              <span className="text-gray-500">Đang upload...</span>
-            </>
-          ) : (
-            <>
-              {type === 'image' ? (
-                <ImageIcon className="w-10 h-10 text-gray-400 mb-2" />
-              ) : (
-                <Music className="w-10 h-10 text-gray-400 mb-2" />
-              )}
-              <span className="text-gray-600 font-medium">Click để chọn file</span>
-              <span className="text-gray-400 text-sm mt-1">Tối đa {maxSize}MB</span>
-            </>
-          )}
-        </label>
-      )}
-
-      {error && (
-        <p className="text-red-500 text-sm mt-2">{error}</p>
+        <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:bg-gray-50 transition-colors text-center">
+          <input
+            type="file"
+            accept="image/*,video/*"
+            onChange={handleFileChange}
+            disabled={uploading}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          />
+          <div className="flex flex-col items-center justify-center gap-2">
+            {uploading ? (
+              <>
+                <Loader2 className="w-8 h-8 text-rose-500 animate-spin" />
+                <p className="text-sm text-gray-500">Đang tải lên mây...</p>
+              </>
+            ) : (
+              <>
+                <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">Nhấn để chọn ảnh/video</p>
+                <p className="text-xs text-gray-400">JPG, PNG, MP4 (Max 10MB)</p>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

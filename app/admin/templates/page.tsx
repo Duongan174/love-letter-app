@@ -1,285 +1,225 @@
+// app/admin/templates/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Search, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import CloudinaryUpload from '@/components/ui/CloudinaryUpload';
-
-interface Template {
-  id: string;
-  name: string;
-  thumbnail: string;
-  category: string;
-  points_required: number;
-  is_premium: boolean;
-  is_active: boolean;
-}
+import { Loader2, Plus, Trash2, Edit2, Play, Image as ImageIcon } from 'lucide-react';
 
 export default function AdminTemplates() {
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // State quay khi lưu vào DB
 
+  // Form State
   const [form, setForm] = useState({
     name: '',
-    thumbnail: '',
-    category: 'love',
+    thumbnail: '', // URL ảnh
+    category: 'love', // love, birthday, classic...
     points_required: 0,
     is_premium: false,
-    is_active: true,
+    is_active: true
   });
 
+  // 1. Tải danh sách mẫu
   useEffect(() => {
     fetchTemplates();
   }, []);
 
   const fetchTemplates = async () => {
-    const { data } = await supabase
-      .from('card_templates')
-      .select('*')
-      .order('created_at', { ascending: false });
-    setTemplates(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('card_templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Lỗi tải danh sách:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // 2. Xử lý lưu (Tạo mới)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    if (!form.thumbnail) return alert('Vui lòng upload ảnh mẫu!');
 
-    if (editingTemplate) {
-      await supabase
-        .from('card_templates')
-        .update(form)
-        .eq('id', editingTemplate.id);
-    } else {
-      await supabase.from('card_templates').insert([form]);
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from('card_templates').insert([form]);
+
+      if (error) throw error;
+
+      // Reset form & reload list
+      setForm({
+        name: '',
+        thumbnail: '',
+        category: 'love',
+        points_required: 0,
+        is_premium: false,
+        is_active: true
+      });
+      fetchTemplates();
+      alert('Thêm mẫu thành công!');
+
+    } catch (error: any) {
+      console.error('Lỗi lưu DB:', error);
+      alert('Lỗi lưu: ' + error.message);
+    } finally {
+      setIsSubmitting(false); // Tắt quay
     }
-
-    setShowModal(false);
-    resetForm();
-    fetchTemplates();
-    setSaving(false);
-  };
-
-  const resetForm = () => {
-    setEditingTemplate(null);
-    setForm({
-      name: '',
-      thumbnail: '',
-      category: 'love',
-      points_required: 0,
-      is_premium: false,
-      is_active: true,
-    });
-  };
-
-  const handleEdit = (template: Template) => {
-    setEditingTemplate(template);
-    setForm({
-      name: template.name,
-      thumbnail: template.thumbnail,
-      category: template.category,
-      points_required: template.points_required,
-      is_premium: template.is_premium,
-      is_active: template.is_active,
-    });
-    setShowModal(true);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Bạn có chắc muốn xóa mẫu thiệp này?')) {
-      await supabase.from('card_templates').delete().eq('id', id);
-      fetchTemplates();
-    }
+    if (!confirm('Xóa mẫu này?')) return;
+    await supabase.from('card_templates').delete().eq('id', id);
+    fetchTemplates();
   };
 
-  const filteredTemplates = templates.filter((t) =>
-    t.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Mẫu thiệp</h1>
-          <p className="text-gray-500">Quản lý các mẫu thiệp</p>
-        </div>
-        <button
-          onClick={() => {
-            setShowModal(true);
-            resetForm();
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-xl hover:bg-rose-600 transition"
-        >
-          <Plus className="w-5 h-5" />
-          Thêm mẫu
-        </button>
-      </div>
+    <div className="max-w-5xl mx-auto space-y-8">
+      <h1 className="text-2xl font-bold text-gray-800">Quản lý Mẫu Thiệp</h1>
 
-      <div className="bg-white rounded-xl p-4 mb-6 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm mẫu thiệp..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-          />
-        </div>
-      </div>
+      {/* FORM THÊM MỚI */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+          <Plus className="w-5 h-5 text-rose-500" /> Thêm mẫu mới
+        </h2>
+        
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Cột trái: Upload */}
+          <div>
+            <CloudinaryUpload 
+              label="Ảnh/Video Mẫu"
+              currentUrl={form.thumbnail}
+              onUpload={(url) => setForm({ ...form, thumbnail: url })}
+            />
+            <p className="text-xs text-gray-400 mt-2 italic">
+              *Hỗ trợ ảnh (.jpg, .png) hoặc video ngắn (.mp4) làm thiệp động.
+            </p>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredTemplates.map((template) => (
-          <div key={template.id} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-            <div className="aspect-[4/3] bg-gray-100 relative">
-              {template.thumbnail ? (
-                <img
-                  src={template.thumbnail}
-                  alt={template.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  No image
-                </div>
-              )}
-              {template.is_premium && (
-                <span className="absolute top-2 left-2 px-2 py-1 bg-yellow-500 text-white text-xs rounded-full">
-                  Premium
-                </span>
-              )}
-              {!template.is_active && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <span className="text-white font-medium">Đã ẩn</span>
-                </div>
-              )}
+          {/* Cột phải: Thông tin */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tên mẫu</label>
+              <input 
+                required
+                type="text" 
+                value={form.name}
+                onChange={e => setForm({...form, name: e.target.value})}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-rose-500 outline-none"
+                placeholder="Ví dụ: Tình yêu vĩnh cửu..."
+              />
             </div>
-            <div className="p-4">
-              <h3 className="font-medium text-gray-800 mb-1">{template.name}</h3>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-500 capitalize">{template.category}</span>
-                <span className="font-medium text-rose-500">💜 {template.points_required}</span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEdit(template)}
-                  className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục</label>
+                <select 
+                  value={form.category}
+                  onChange={e => setForm({...form, category: e.target.value})}
+                  className="w-full p-2 border rounded-lg outline-none"
                 >
-                  <Edit className="w-4 h-4" />
-                  Sửa
-                </button>
-                <button
-                  onClick={() => handleDelete(template.id)}
-                  className="flex items-center justify-center px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                  <option value="love">Tình yêu</option>
+                  <option value="birthday">Sinh nhật</option>
+                  <option value="classic">Cổ điển</option>
+                  <option value="thankyou">Cảm ơn</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giá (Tym)</label>
+                <input 
+                  type="number" 
+                  value={form.points_required}
+                  onChange={e => setForm({...form, points_required: Number(e.target.value)})}
+                  className="w-full p-2 border rounded-lg outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={form.is_premium}
+                  onChange={e => setForm({...form, is_premium: e.target.checked})}
+                  className="w-4 h-4 text-rose-500 rounded"
+                />
+                <span className="text-sm font-medium">Premium</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={form.is_active}
+                  onChange={e => setForm({...form, is_active: e.target.checked})}
+                  className="w-4 h-4 text-green-500 rounded"
+                />
+                <span className="text-sm font-medium">Hiển thị ngay</span>
+              </label>
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={isSubmitting || !form.thumbnail}
+              className="w-full py-2.5 bg-rose-500 text-white rounded-lg font-bold hover:bg-rose-600 disabled:bg-gray-300 transition-colors flex justify-center items-center gap-2"
+            >
+              {isSubmitting && <Loader2 className="animate-spin w-4 h-4" />}
+              {isSubmitting ? 'Đang lưu...' : 'Lưu Mẫu Thiệp'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* DANH SÁCH HIỆN CÓ */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-gray-50 font-bold text-gray-500 text-xs uppercase">
+          Danh sách mẫu ({templates.length})
+        </div>
+        
+        {loading ? (
+          <div className="p-8 text-center"><Loader2 className="animate-spin w-6 h-6 mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {templates.map(t => (
+              <div key={t.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
+                {/* Thumbnail */}
+                <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200 relative">
+                  {t.thumbnail?.endsWith('.mp4') ? (
+                    <>
+                      <video src={t.thumbnail} className="w-full h-full object-cover" muted />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20"><Play className="w-6 h-6 text-white" /></div>
+                    </>
+                  ) : (
+                    <img src={t.thumbnail} className="w-full h-full object-cover" alt={t.name} />
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-gray-800 truncate">{t.name}</h3>
+                  <div className="flex gap-2 text-xs mt-1">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded capitalize">{t.category}</span>
+                    <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded">{t.points_required} Tym</span>
+                    {t.is_premium && <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Premium</span>}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <button 
+                  onClick={() => handleDelete(t.id)}
+                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              {editingTemplate ? 'Sửa mẫu thiệp' : 'Thêm mẫu thiệp'}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tên mẫu</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Hình ảnh</label>
-                <CloudinaryUpload
-                  onUpload={(url) => setForm({ ...form, thumbnail: url })}
-                  folder="vintage-ecard/templates"
-                  currentUrl={form.thumbnail}
-                  maxSize={10}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                >
-                  <option value="love">Tình yêu</option>
-                  <option value="birthday">Sinh nhật</option>
-                  <option value="thanks">Cảm ơn</option>
-                  <option value="classic">Cổ điển</option>
-                  <option value="holiday">Lễ hội</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Giá (Tym)</label>
-                <input
-                  type="number"
-                  value={form.points_required}
-                  onChange={(e) => setForm({ ...form, points_required: parseInt(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  min="0"
-                />
-              </div>
-
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.is_premium}
-                    onChange={(e) => setForm({ ...form, is_premium: e.target.checked })}
-                    className="w-4 h-4 text-rose-500"
-                  />
-                  <span className="text-sm text-gray-700">Premium</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.is_active}
-                    onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                    className="w-4 h-4 text-rose-500"
-                  />
-                  <span className="text-sm text-gray-700">Hiển thị</span>
-                </label>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editingTemplate ? 'Cập nhật' : 'Thêm'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
