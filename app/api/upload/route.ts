@@ -1,26 +1,47 @@
+// app/api/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import cloudinary from '@/lib/cloudinary';
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Kiểm tra cấu hình trước
+    if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY) {
+      console.error('❌ Thiếu cấu hình Cloudinary trong .env.local');
+      return NextResponse.json(
+        { error: 'Server chưa cấu hình Cloudinary' }, 
+        { status: 500 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const folder = formData.get('folder') as string || 'vintage-ecard';
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+      return NextResponse.json({ error: 'Không tìm thấy file' }, { status: 400 });
     }
 
-    // Convert file to base64
+    // 2. Chuyển file sang Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString('base64');
-    const dataUri = `data:${file.type};base64,${base64}`;
-
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(dataUri, {
-      folder: folder,
-      resource_type: 'auto', // auto detect image/video/audio
+    
+    // 3. Upload lên Cloudinary bằng Promise
+    // Sử dụng upload_stream để an toàn hơn với file lớn
+    const result = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'auto', // Tự động nhận diện ảnh/nhạc/video
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary Upload Error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      ).end(buffer);
     });
 
     return NextResponse.json({
@@ -30,14 +51,12 @@ export async function POST(request: NextRequest) {
       width: result.width,
       height: result.height,
     });
-  } catch (error) {
-    console.error('Upload error:', error);
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+
+  } catch (error: any) {
+    console.error('❌ Upload API Error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Lỗi upload server' }, 
+      { status: 500 }
+    );
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

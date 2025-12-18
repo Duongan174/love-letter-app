@@ -1,3 +1,4 @@
+// app/admin/layout.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +9,8 @@ import {
   LayoutDashboard, Users, Image, Mail, Stamp, Music, 
   Gift, FileHeart, Settings, LogOut, Menu, X, Heart
 } from 'lucide-react';
-import { useAuth } from '../providers';
+// 👇 SỬA LỖI Ở ĐÂY: Import đúng nguồn
+import { useAuth } from '@/hooks/useAuth';
 
 const menuItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -25,7 +27,7 @@ const menuItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth(); // Lấy thêm signOut từ hook
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Heart className="w-6 h-6 text-rose-500" fill="currentColor" />
-          <span className="font-bold text-gray-800">Admin Panel</span>
+          <span className="font-bold text-gray-800">Echo Admin</span>
         </div>
         <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2">
           {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -76,8 +78,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Heart className="w-5 h-5 text-white" fill="currentColor" />
                 </div>
                 <div>
-                  <h1 className="font-bold text-gray-800">Vintage E-Card</h1>
-                  <p className="text-xs text-gray-500">Admin Panel</p>
+                  <h1 className="font-bold text-gray-800">Echo Admin</h1>
+                  <p className="text-xs text-gray-500">Control Panel</p>
                 </div>
               </div>
             </div>
@@ -108,23 +110,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* User Info */}
             <div className="p-4 border-t border-gray-100">
               <div className="flex items-center gap-3 mb-3">
-                <img
-                  src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=f43f5e&color=fff`}
-                  alt={user.name}
-                  className="w-10 h-10 rounded-full"
-                />
+                <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center overflow-hidden">
+                   {user.avatar ? (
+                     <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                   ) : (
+                     <span className="text-rose-500 font-bold">{user.name.charAt(0)}</span>
+                   )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-800 truncate">{user.name}</p>
                   <p className="text-xs text-gray-500 truncate">{user.email}</p>
                 </div>
               </div>
-              <Link
-                href="/"
-                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition w-full"
+              <button
+                onClick={() => signOut()}
+                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition w-full"
               >
                 <LogOut className="w-4 h-4" />
-                <span className="text-sm">Về trang chủ</span>
-              </Link>
+                <span className="text-sm">Đăng xuất</span>
+              </button>
             </div>
           </div>
         </aside>
@@ -138,7 +142,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         )}
 
         {/* Main Content */}
-        <main className="flex-1 min-h-screen lg:p-8 p-4">
+        <main className="flex-1 min-h-screen lg:p-8 p-4 overflow-x-hidden">
           {children}
         </main>
       </div>

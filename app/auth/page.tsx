@@ -1,142 +1,91 @@
+// app/auth/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Heart, Mail, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Heart, Sparkles, Facebook, Mail } from 'lucide-react';
+// Import từ hooks để tránh lỗi
+import { useAuth } from '@/hooks/useAuth'; 
+
+// Icon Google SVG Component
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M23.766 12.2764C23.766 11.4607 23.6999 10.6406 23.5588 9.83807H12.24V14.4591H18.7217C18.4528 15.9494 17.5885 17.2678 16.323 18.1056V21.1039H20.19C22.4608 19.0139 23.766 15.9274 23.766 12.2764Z" fill="#4285F4"/>
+    <path d="M12.24 24.0008C15.4765 24.0008 18.2058 22.9382 20.19 21.1039L16.323 18.1056C15.251 18.8375 13.8627 19.252 12.24 19.252C9.11388 19.252 6.45946 17.1399 5.50705 14.3003H1.5166V17.3912C3.55371 21.4434 7.7029 24.0008 12.24 24.0008Z" fill="#34A853"/>
+    <path d="M5.50705 14.3003C5.01664 12.8688 5.01664 11.1321 5.50705 9.70058V6.60971H1.5166C-0.370591 10.3709 -0.370591 13.6304 1.5166 17.3912L5.50705 14.3003Z" fill="#FBBC05"/>
+    <path d="M12.24 4.74966C13.9509 4.7232 15.6044 5.36697 16.8434 6.54867L20.2695 3.12262C18.1001 1.0855 15.2208 -0.034466 12.24 0.000808666C7.7029 0.000808666 3.55371 2.55822 1.5166 6.60971L5.50705 9.70058C6.45079 6.86106 9.10912 4.74966 12.24 4.74966Z" fill="#EA4335"/>
+  </svg>
+);
 
 export default function AuthPage() {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  const { user, signInWithFacebook, signInWithGoogle, loading } = useAuth();
   const router = useRouter();
 
-  const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
-    setOauthLoading(provider);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` }
-    });
-    if (error) {
-      alert('Lỗi: ' + error.message);
-      setOauthLoading(null);
+  useEffect(() => {
+    if (user && !loading) {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect') || '/dashboard';
+      router.push(redirect);
     }
-  };
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
-    });
-    setLoading(false);
-    if (error) alert('Lỗi: ' + error.message);
-    else setSent(true);
-  };
-
-  if (sent) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-50 p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-xl">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Mail className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Kiểm tra email!</h2>
-          <p className="text-gray-600 mb-4">Link đăng nhập đã gửi đến <strong>{email}</strong></p>
-          <button onClick={() => setSent(false)} className="text-rose-500 hover:underline">
-            Thử email khác
-          </button>
-        </div>
-      </main>
-    );
-  }
+  }, [user, loading, router]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl"
+        className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center relative overflow-hidden"
       >
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-rose-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Heart className="w-8 h-8 text-white" fill="currentColor" />
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-400 to-purple-500" />
+        
+        {/* Logo Echo */}
+        <div className="flex justify-center items-center gap-2 mb-6">
+          <div className="relative">
+             <Heart className="w-10 h-10 text-rose-500" fill="currentColor" />
+             <Sparkles className="w-5 h-5 text-amber-400 absolute -top-2 -right-2 animate-bounce" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Đăng nhập</h1>
-          <p className="text-gray-600 mt-2">Vintage E-Card</p>
+          <span className="font-playfair text-3xl font-bold bg-gradient-to-r from-rose-500 to-purple-600 bg-clip-text text-transparent">
+            Echo
+          </span>
         </div>
 
-        {/* OAuth Buttons */}
-        <div className="space-y-3 mb-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Đăng nhập</h2>
+        <p className="text-gray-500 mb-8">Kết nối để lưu giữ những kỷ niệm.</p>
+
+        <div className="space-y-4">
+          {/* Nút Facebook */}
           <button
-            onClick={() => handleOAuthLogin('google')}
-            disabled={!!oauthLoading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 rounded-xl font-medium transition"
+            onClick={signInWithFacebook}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-[#1877F2] text-white rounded-xl font-medium hover:bg-[#166fe5] transition shadow-md hover:shadow-lg"
           >
-            {oauthLoading === 'google' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-            )}
+            <Facebook className="w-5 h-5" />
+            Tiếp tục với Facebook
+          </button>
+
+          {/* Nút Google (Đã thêm lại) */}
+          <button
+            onClick={signInWithGoogle}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition shadow-sm hover:shadow-md"
+          >
+            <GoogleIcon />
             Tiếp tục với Google
           </button>
 
+          {/* Nút Email */}
           <button
-            onClick={() => handleOAuthLogin('facebook')}
-            disabled={!!oauthLoading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-xl font-medium transition"
+            disabled
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-gray-100 text-gray-400 rounded-xl font-medium cursor-not-allowed"
           >
-            {oauthLoading === 'facebook' ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-            )}
-            Tiếp tục với Facebook
+            <Mail className="w-5 h-5" />
+            Đăng nhập Email (Sắp ra mắt)
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-gray-400 text-sm">hoặc</span>
-          <div className="flex-1 h-px bg-gray-200" />
-        </div>
-
-        {/* Email Login */}
-        <form onSubmit={handleEmailLogin} className="space-y-4">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Nhập email của bạn"
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
-            required
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-rose-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mail className="w-5 h-5" />}
-            {loading ? 'Đang gửi...' : 'Gửi link đăng nhập'}
-          </button>
-        </form>
-
-        <button onClick={() => router.push('/')} className="w-full mt-4 py-3 text-gray-600 hover:text-rose-500">
-          ← Quay lại trang chủ
-        </button>
+        <p className="mt-8 text-xs text-gray-400">
+          Bằng việc tiếp tục, bạn đồng ý với Điều khoản dịch vụ và Chính sách bảo mật của Echo.
+        </p>
       </motion.div>
-    </main>
+    </div>
   );
 }

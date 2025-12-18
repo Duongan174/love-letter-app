@@ -1,265 +1,198 @@
 // components/create/Step5Music.tsx
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Music, Play, Pause, Volume2, VolumeX, Heart, Clock, Check, X } from 'lucide-react';
-import { MusicTrack } from '@/hooks/useCreateCard';
+import { useState, useEffect, useRef } from 'react';
+import { Music, Play, Pause, Loader2, AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+
+// Định nghĩa linh hoạt hơn để bắt mọi trường hợp tên cột
+interface MusicTrack {
+  id: string;
+  name: string;
+  artist: string;
+  src?: string;       // Trường hợp 1: Tên chuẩn
+  url?: string;       // Trường hợp 2: Tên thường gặp
+  thumbnail?: string; // Trường hợp 3: Do copy từ code ảnh
+  points_required: number;
+}
 
 interface Step5MusicProps {
   selectedMusicId: string | null;
-  onSelectMusic: (music: MusicTrack | null) => void;
+  onSelectMusic: (music: any) => void;
 }
 
-// Mock music data - sẽ thay bằng Supabase
-const mockMusicTracks: MusicTrack[] = [
-  { id: '1', name: 'Nhạc Nhẹ Nhàng', url: '/music/soft.mp3', category: 'romantic', duration: 180, tym_cost: 0 },
-  { id: '2', name: 'Piano Tình Yêu', url: '/music/piano.mp3', category: 'romantic', duration: 210, tym_cost: 0 },
-  { id: '3', name: 'Guitar Acoustic', url: '/music/guitar.mp3', category: 'acoustic', duration: 195, tym_cost: 0 },
-  { id: '4', name: 'Violin Romance', url: '/music/violin.mp3', category: 'classical', duration: 240, tym_cost: 0 },
-  { id: '5', name: 'Jazz Cafe', url: '/music/jazz.mp3', category: 'jazz', duration: 225, tym_cost: 0 },
-  { id: '6', name: 'Lofi Beats', url: '/music/lofi.mp3', category: 'modern', duration: 200, tym_cost: 0 },
-];
-
-const categories = [
-  { id: 'all', name: 'Tất cả' },
-  { id: 'romantic', name: 'Lãng mạn' },
-  { id: 'acoustic', name: 'Acoustic' },
-  { id: 'classical', name: 'Cổ điển' },
-  { id: 'jazz', name: 'Jazz' },
-  { id: 'modern', name: 'Hiện đại' },
-];
-
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-export default function Step5Music({
-  selectedMusicId,
-  onSelectMusic,
-}: Step5MusicProps) {
-  const [activeCategory, setActiveCategory] = useState('all');
+export default function Step5Music({ selectedMusicId, onSelectMusic }: Step5MusicProps) {
+  const [tracks, setTracks] = useState<MusicTrack[]>([]);
+  const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const filteredTracks = activeCategory === 'all'
-    ? mockMusicTracks
-    : mockMusicTracks.filter(t => t.category === activeCategory);
+  // Fetch nhạc từ DB
+  useEffect(() => {
+    const fetchMusic = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('music')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
 
-  const selectedTrack = mockMusicTracks.find(t => t.id === selectedMusicId);
-
-  // Handle play/pause
-  const togglePlay = (track: MusicTrack) => {
-    if (playingId === track.id) {
-      // Pause
-      audioRef.current?.pause();
-      setPlayingId(null);
-    } else {
-      // Play new track
-      if (audioRef.current) {
-        audioRef.current.pause();
+        if (error) throw error;
+        setTracks(data || []);
+      } catch (error) {
+        console.error('Lỗi tải nhạc:', error);
+      } finally {
+        setLoading(false);
       }
-      // In real app, create audio element with actual URL
-      // For now, just toggle state
+    };
+    fetchMusic();
+  }, []);
+
+  // Hàm lấy URL thực sự của bài hát bất kể tên cột là gì
+  const getTrackUrl = (track: MusicTrack) => {
+    return track.src || track.url || track.thumbnail || '';
+  };
+
+  // Xử lý phát thử
+  const handlePlayPreview = async (track: MusicTrack, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Lấy URL chuẩn
+    const trackUrl = getTrackUrl(track);
+
+    if (playingId === track.id) {
+      audio.pause();
+      setPlayingId(null);
+      return;
+    }
+
+    try {
+      if (!trackUrl) {
+        alert("Lỗi dữ liệu: Không tìm thấy đường dẫn file nhạc!");
+        console.log("Track Data:", track); // Log để debug
+        return;
+      }
+
       setPlayingId(track.id);
+      audio.src = trackUrl;
+      audio.load();
+      await audio.play();
+    } catch (error) {
+      console.error("Lỗi phát nhạc:", error);
+      alert("Không thể phát bài nhạc này. Định dạng không hỗ trợ hoặc link hỏng.");
+      setPlayingId(null);
     }
   };
 
-  // Cleanup audio on unmount
+  const handleAudioEnded = () => {
+    setPlayingId(null);
+  };
+
   useEffect(() => {
     return () => {
-      audioRef.current?.pause();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
     };
   }, []);
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4">
-      {/* Header */}
+    <div className="w-full max-w-4xl mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
-          Chọn nhạc nền
-        </h2>
-        <p className="text-gray-600">
-          Thêm âm nhạc để thiệp thêm cảm xúc (tùy chọn)
-        </p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Chọn Nhạc Nền</h2>
+        <p className="text-gray-600">Giai điệu giúp cảm xúc thêm thăng hoa.</p>
       </div>
 
-      {/* Category Filter */}
-      <div className="flex flex-wrap justify-center gap-2 mb-8">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
+      <audio 
+        ref={audioRef} 
+        className="hidden" 
+        onEnded={handleAudioEnded} 
+        onError={() => setPlayingId(null)}
+      />
+
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 className="animate-spin text-rose-500" /></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          {/* Option: Không dùng nhạc */}
+          <div
+            onClick={() => onSelectMusic(null)}
             className={`
-              px-4 py-2 rounded-full text-sm font-medium transition-all
-              ${activeCategory === cat.id 
-                ? 'bg-rose-500 text-white shadow-lg' 
-                : 'bg-white text-gray-600 hover:bg-rose-50 border border-gray-200'
-              }
+              flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all bg-white
+              ${selectedMusicId === null ? 'border-rose-500 bg-rose-50' : 'border-gray-100 hover:border-rose-200'}
             `}
           >
-            {cat.name}
-          </button>
-        ))}
-      </div>
-
-      {/* No Music Option */}
-      <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        onClick={() => onSelectMusic(null)}
-        className={`
-          w-full mb-4 p-4 rounded-xl border-2 transition-all flex items-center justify-between
-          ${selectedMusicId === null 
-            ? 'border-rose-500 bg-rose-50' 
-            : 'border-gray-200 hover:border-rose-300'
-          }
-        `}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`
-            w-10 h-10 rounded-full flex items-center justify-center
-            ${selectedMusicId === null ? 'bg-rose-500 text-white' : 'bg-gray-200 text-gray-500'}
-          `}>
-            <VolumeX className="w-5 h-5" />
-          </div>
-          <div className="text-left">
-            <p className="font-medium text-gray-800">Không có nhạc</p>
-            <p className="text-sm text-gray-500">Thiệp sẽ hiển thị không có âm thanh</p>
-          </div>
-        </div>
-        {selectedMusicId === null && (
-          <Check className="w-6 h-6 text-rose-500" />
-        )}
-      </motion.button>
-
-      {/* Music Tracks List */}
-      <div className="space-y-3">
-        {filteredTracks.map((track, index) => {
-          const isSelected = selectedMusicId === track.id;
-          const isPlaying = playingId === track.id;
-          
-          return (
-            <motion.div
-              key={track.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className={`
-                p-4 rounded-xl border-2 transition-all
-                ${isSelected 
-                  ? 'border-rose-500 bg-rose-50 shadow-lg' 
-                  : 'border-gray-200 hover:border-rose-300 bg-white'
-                }
-              `}
-            >
-              <div className="flex items-center gap-4">
-                {/* Play Button */}
-                <button
-                  onClick={() => togglePlay(track)}
-                  className={`
-                    w-12 h-12 rounded-full flex items-center justify-center transition-all
-                    ${isPlaying 
-                      ? 'bg-rose-500 text-white' 
-                      : 'bg-rose-100 text-rose-500 hover:bg-rose-200'
-                    }
-                  `}
-                >
-                  {isPlaying ? (
-                    <Pause className="w-5 h-5" />
-                  ) : (
-                    <Play className="w-5 h-5 ml-0.5" />
-                  )}
-                </button>
-
-                {/* Track Info */}
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800">{track.name}</h3>
-                  <div className="flex items-center gap-3 text-sm text-gray-500">
-                    <span className="capitalize">{track.category}</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatDuration(track.duration)}
-                    </span>
-                    <span className={track.tym_cost === 0 ? 'text-green-600' : 'text-rose-600'}>
-                      {track.tym_cost === 0 ? 'Miễn phí' : `💜 ${track.tym_cost} Tym`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Select Button */}
-                <button
-                  onClick={() => onSelectMusic(track)}
-                  className={`
-                    px-4 py-2 rounded-lg font-medium transition-all
-                    ${isSelected 
-                      ? 'bg-rose-500 text-white' 
-                      : 'bg-gray-100 text-gray-600 hover:bg-rose-100 hover:text-rose-600'
-                    }
-                  `}
-                >
-                  {isSelected ? 'Đã chọn' : 'Chọn'}
-                </button>
-              </div>
-
-              {/* Waveform Animation (when playing) */}
-              {isPlaying && (
-                <div className="mt-3 flex items-center gap-1 justify-center">
-                  {[...Array(20)].map((_, i) => (
-                    <motion.div
-                      key={i}
-                      animate={{
-                        height: [8, 24, 8],
-                      }}
-                      transition={{
-                        duration: 0.5,
-                        repeat: Infinity,
-                        delay: i * 0.05,
-                      }}
-                      className="w-1 bg-rose-400 rounded-full"
-                    />
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Selected Track Summary */}
-      {selectedTrack && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-8 p-4 bg-gradient-to-r from-rose-100 to-pink-100 rounded-2xl"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-rose-500 rounded-full flex items-center justify-center">
-                <Music className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Nhạc đã chọn</p>
-                <p className="font-semibold text-gray-800">{selectedTrack.name}</p>
-              </div>
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+              <Music className="w-5 h-5" />
             </div>
-            <button
-              onClick={() => onSelectMusic(null)}
-              className="text-rose-500 hover:text-rose-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div>
+              <p className="font-bold text-gray-700">Không dùng nhạc</p>
+              <p className="text-xs text-gray-500">Im lặng</p>
+            </div>
           </div>
-        </motion.div>
-      )}
 
-      {/* Note */}
-      <p className="text-center text-sm text-gray-400 mt-6">
-        💡 Nhạc sẽ tự động phát khi người nhận mở thiệp
-      </p>
+          {/* Danh sách nhạc */}
+          {tracks.length > 0 ? (
+            tracks.map((track) => {
+              const isSelected = selectedMusicId === track.id;
+              const isPlaying = playingId === track.id;
+              const hasUrl = !!getTrackUrl(track); // Kiểm tra xem có link không
+
+              return (
+                <div
+                  key={track.id}
+                  onClick={() => hasUrl && onSelectMusic(track)}
+                  className={`
+                    flex items-center justify-between p-4 rounded-xl border-2 transition-all bg-white group
+                    ${isSelected ? 'border-rose-500 bg-rose-50' : 'border-gray-100 hover:border-rose-200'}
+                    ${!hasUrl ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  `}
+                >
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={(e) => handlePlayPreview(track, e)}
+                      disabled={!hasUrl}
+                      className={`
+                        w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow-sm shrink-0
+                        ${isPlaying 
+                          ? 'bg-rose-500 text-white' 
+                          : 'bg-rose-100 text-rose-500 group-hover:bg-rose-200'
+                        }
+                      `}
+                    >
+                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-1" />}
+                    </button>
+                    
+                    <div className="overflow-hidden">
+                      <p className={`font-bold truncate ${isSelected ? 'text-rose-700' : 'text-gray-800'}`}>
+                        {track.name}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {track.artist || 'Unknown Artist'}
+                      </p>
+                      {!hasUrl && <p className="text-[10px] text-red-500">Lỗi: Mất file nhạc</p>}
+                    </div>
+                  </div>
+
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${track.points_required > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                    {track.points_required > 0 ? `${track.points_required} Tym` : 'Free'}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-1 md:col-span-2 text-center py-10 text-gray-400 flex flex-col items-center">
+              <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
+              <p>Chưa có bài nhạc nào trong hệ thống.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

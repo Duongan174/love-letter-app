@@ -1,11 +1,11 @@
 // app/layout.tsx
 import './globals.css';
 import type { Metadata } from 'next';
-import { Providers } from './providers';
+import { Providers } from './providers'; // Đảm bảo import đúng
 
 export const metadata: Metadata = {
-  title: 'Vintage E-Card | Thiệp Kỷ Niệm Online',
-  description: 'Tạo và gửi thiệp điện tử độc đáo với hiệu ứng 3D, nhạc nền và nhiều tùy chỉnh đẹp mắt.',
+  title: 'Echo | Gửi Trọn Yêu Thương',
+  description: 'Nền tảng gửi thiệp điện tử và kết nối cảm xúc.',
 };
 
 export default function RootLayout({
@@ -14,7 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className="scroll-smooth">
+    // 👇 THÊM: data-scroll-behavior="smooth" để sửa lỗi warning
+    <html lang="vi" className="scroll-smooth" data-scroll-behavior="smooth">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

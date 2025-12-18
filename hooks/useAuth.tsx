@@ -1,51 +1,43 @@
 // hooks/useAuth.tsx
 'use client';
-import { useEffect, useState, createContext, useContext, ReactNode } from 'react';
+
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { User } from '@/types';
-import { Session } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+// Đảm bảo bạn có file types định nghĩa User, nếu chưa có thì thay User bằng any tạm thời
+import { User } from '@/types'; 
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  signInWithFacebook: () => Promise<void>;
-  signInWithTikTok: () => Promise<void>;
-  signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export function useAuth() {
+  const [user, setUser] = useState<User | any | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const fetchUser = async (authUser: any) => {
-    if (!authUser) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
+  // Hàm xử lý: Lấy thông tin User từ DB, nếu chưa có thì tạo mới
+  const fetchUserProfile = async (sessionUser: any) => {
+    if (!sessionUser) return null;
 
     try {
+      // 1. Tìm user trong bảng 'users'
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', authUser.id)
+        .eq('id', sessionUser.id)
         .single();
 
       if (data) {
-        setUser(data);
-      } else if (error?.code === 'PGRST116') {
-        // User không tồn tại, tạo mới
+        return data;
+      } 
+      
+      // 2. Nếu lỗi là do không tìm thấy (PGRST116) -> Tạo mới
+      if (error?.code === 'PGRST116') {
         const newUser = {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
-          avatar: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || null,
+          id: sessionUser.id,
+          email: sessionUser.email || '',
+          name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'User',
+          avatar: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture || null,
           role: 'user',
-          points: 100,
-          provider: authUser.app_metadata?.provider || 'email',
+          points: 100, // Tặng 100 tym
+          provider: sessionUser.app_metadata?.provider || 'email',
         };
 
         const { data: created, error: createError } = await supabase
@@ -54,90 +46,103 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select()
           .single();
 
-        if (created) {
-          setUser(created);
-        } else {
-          console.error('Error creating user:', createError);
+        if (createError) {
+          console.error('Lỗi tạo user mới:', createError);
+          return null;
         }
+        return created;
       }
+      
+      return null;
     } catch (err) {
-      console.error('Error fetching user:', err);
-    } finally {
-      setLoading(false);
+      console.error('Lỗi fetch user:', err);
+      return null;
     }
   };
 
   useEffect(() => {
-    // Check current session
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      if (session?.user) {
-        fetchUser(session.user);
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: string, session: Session | null) => {
-        console.log('Auth event:', event);
-        if (event === 'SIGNED_IN' && session?.user) {
-          await fetchUser(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setLoading(false);
+    // Hàm khởi tạo Auth
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          const profile = await fetchUserProfile(session.user);
+          if (mounted) setUser(profile);
+        } else {
+          if (mounted) setUser(null);
+        }
+      } catch (error) {
+        console.error("Auth init error:", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Lắng nghe thay đổi (Đăng nhập/Đăng xuất)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        // Chỉ fetch lại nếu chưa có user hoặc user thay đổi
+        const profile = await fetchUserProfile(session.user);
+        if (mounted) setUser(profile);
+      } else {
+        if (mounted) setUser(null);
+        // Nếu đăng xuất -> redirect (Tuỳ chọn)
+        if (event === 'SIGNED_OUT') {
+           router.push('/auth');
         }
       }
-    );
+      if (mounted) setLoading(false);
+    });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  // --- CÁC HÀM HÀNH ĐỘNG ---
 
   const signInWithFacebook = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'facebook',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) alert(error.message);
+  };
+
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { access_type: 'offline', prompt: 'consent' },
       },
     });
-    if (error) console.error('Facebook sign in error:', error);
+    if (error) alert(error.message);
   };
 
   const signInWithTikTok = async () => {
-    // TikTok chưa được hỗ trợ native bởi Supabase
-    alert('Đăng nhập TikTok đang được phát triển. Vui lòng sử dụng Facebook.');
+    alert('Tính năng đang bảo trì.');
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    router.push('/auth');
   };
 
-  const refreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      await fetchUser(session.user);
-    }
+  // Trả về trực tiếp, không dùng Context Provider nữa
+  return { 
+    user, 
+    loading, 
+    signInWithFacebook, 
+    signInWithGoogle, 
+    signInWithTikTok, 
+    signOut 
   };
-
-  return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      signInWithFacebook, 
-      signInWithTikTok, 
-      signOut, 
-      refreshUser 
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }
