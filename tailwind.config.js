@@ -69,21 +69,17 @@ module.exports = {
         },
       },
 
-      // === TYPOGRAPHY ===
+      // === TYPOGRAPHY (Đã cập nhật hỗ trợ tiếng Việt) ===
       fontFamily: {
-        // Display - For large headings, hero text
-        display: ['Playfair Display', 'Georgia', 'serif'],
-        // Heading - For section titles
+        vn: ['Be Vietnam Pro', 'sans-serif'], // Font tiếng Việt mới thêm
+        display: ['Playfair Display', 'Be Vietnam Pro', 'serif'], // Đã cập nhật
+        elegant: ['EB Garamond', 'Be Vietnam Pro', 'serif'], // Đã cập nhật
+        body: ['Be Vietnam Pro', 'Lexend', 'sans-serif'], // Đã cập nhật
+        script: ['Dancing Script', 'cursive'], // Đã cập nhật
+        
+        // Các font gốc vẫn giữ nguyên
         heading: ['Cormorant Garamond', 'Georgia', 'serif'],
-        // Body - For paragraph text
-        body: ['Crimson Pro', 'Georgia', 'serif'],
-        // Script - For decorative, handwritten style
-        script: ['Dancing Script', 'cursive'],
-        // Elegant - For refined body text
-        elegant: ['EB Garamond', 'Georgia', 'serif'],
-        // Modern - For UI elements, buttons
         modern: ['Lexend', 'system-ui', 'sans-serif'],
-        // Legacy support
         dancing: ['Dancing Script', 'cursive'],
         playfair: ['Playfair Display', 'Georgia', 'serif'],
         lexend: ['Lexend', 'system-ui', 'sans-serif'],
@@ -178,4 +174,4 @@ module.exports = {
     },
   },
   plugins: [],
-}
+} 
