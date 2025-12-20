@@ -79,11 +79,49 @@ export default function TemplatesPage() {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // HANDLERS
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleSelectTemplate = (templateId: string) => {
+// HANDLERS
+// ─────────────────────────────────────────────────────────────────────────────
+const handleSelectTemplate = async (templateId: string) => {
+  // Nếu chưa login: giữ hành vi cũ để create page tự redirect auth
+  const { data } = await supabase.auth.getSession();
+  if (!data?.session) {
     router.push(`/create?templateId=${templateId}`);
-  };
+    return;
+  }
+
+  // Nếu đã login: tạo draft ngay để wizard auto-save
+  const res = await fetch('/api/card-drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateId }),
+  });
+
+  // ✅ Không dùng res.json() trực tiếp để tránh crash khi body rỗng / không phải JSON
+  const raw = await res.text();
+
+  let json: any = null;
+  try {
+    json = raw ? JSON.parse(raw) : null;
+  } catch {
+    // server có thể trả HTML/empty -> cứ fallback
+  }
+
+  if (!res.ok) {
+    // fallback về flow cũ cho chắc
+    router.push(`/create?templateId=${templateId}`);
+    return;
+  }
+
+  const draftId = json?.data?.id;
+  if (!draftId) {
+    router.push(`/create?templateId=${templateId}`);
+    return;
+  }
+
+  router.push(`/create?draftId=${draftId}`);
+}; // ✅ QUAN TRỌNG: đóng function ở đây
+
+
 
   // ─────────────────────────────────────────────────────────────────────────────
   // FILTERED TEMPLATES

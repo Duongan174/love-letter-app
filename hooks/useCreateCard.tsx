@@ -18,14 +18,13 @@ export interface CardTemplate {
 export interface CreateCardState {
   templateId: string | null;
   envelopeId: string | null;
-  // ĐÃ XÓA linerPattern
   stampId: string | null;
   recipientName: string;
   senderName: string;
   message: string;
   fontStyle: string;
   textEffect: string;
-  photos: any[];
+  photos: string[];
   musicId: string | null;
   signatureData: string | null;
   totalTymCost: number;
@@ -36,7 +35,8 @@ export interface CreateCardState {
   music: any;
 }
 
-export function useCreateCard() {
+// ✅ IMPORTANT: define function normally, then export BOTH named & default
+function useCreateCard() {
   const [state, setState] = useState<CreateCardState>({
     templateId: null,
     envelopeId: null,
@@ -74,26 +74,43 @@ export function useCreateCard() {
     if (data) setState(prev => ({ ...prev, templateId: id, template: data }));
   };
 
+  const setEnvelopeById = async (id: string) => {
+    if (!id) return;
+    const { data } = await supabase.from('envelopes').select('*').eq('id', id).single();
+    if (data) setState(prev => ({ ...prev, envelopeId: id, envelope: data }));
+  };
+
+  const setStampById = async (id: string) => {
+    if (!id) return;
+    const { data } = await supabase.from('stamps').select('*').eq('id', id).single();
+    if (data) setState(prev => ({ ...prev, stampId: id, stamp: data }));
+  };
+
+  const setMusicById = async (id: string) => {
+    if (!id) return;
+    const { data } = await supabase.from('music').select('*').eq('id', id).single();
+    if (data) setState(prev => ({ ...prev, musicId: id, music: data }));
+  };
+
   const selectEnvelope = (envelope: any) => {
     setState(prev => ({ ...prev, envelopeId: envelope.id, envelope }));
   };
-
-  // ĐÃ XÓA hàm selectLiner
 
   const selectStamp = (stamp: any) => {
     setState(prev => ({ ...prev, stampId: stamp.id, stamp }));
   };
 
   const updateMessage = (data: any) => setState(prev => ({ ...prev, ...data }));
-  const addPhoto = (photo: any) => setState(prev => ({ ...prev, photos: [...prev.photos, photo] }));
-  const removePhoto = (id: string) => setState(prev => ({ ...prev, photos: prev.photos.filter(p => p.id !== id) }));
+  const addPhoto = (photoUrl: string) => setState(prev => ({ ...prev, photos: [...prev.photos, photoUrl] }));
+  const removePhoto = (index: number) =>
+    setState(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
   const selectMusic = (music: any) => setState(prev => ({ ...prev, musicId: music?.id || null, music }));
   const setSignature = (data: string) => setState(prev => ({ ...prev, signatureData: data }));
 
   // Navigation Logic
   const canProceed = (step: number) => {
     switch (step) {
-      case 1: return !!state.envelopeId; 
+      case 1: return !!state.envelopeId;
       case 2: return !!state.stampId;
       case 3: return !!state.recipientName && !!state.message;
       default: return true;
@@ -107,6 +124,9 @@ export function useCreateCard() {
     state,
     currentStep,
     setTemplateById,
+    setEnvelopeById,
+    setStampById,
+    setMusicById,
     selectEnvelope,
     selectStamp,
     updateMessage,
@@ -120,3 +140,7 @@ export function useCreateCard() {
     totalTymCost: state.totalTymCost,
   };
 }
+
+// ✅ Export both styles
+export { useCreateCard };
+export default useCreateCard;

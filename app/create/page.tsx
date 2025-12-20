@@ -1,15 +1,15 @@
-// app/create/page.tsx
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Transition } from 'framer-motion';
 import { Heart, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 
-// Components MỚI (Đã tách Phong bì & Tem)
+
+// Components
 import StepIndicator from '@/components/create/StepIndicator';
-import Step1Envelope from '@/components/create/Step1Envelope'; // Component 3D mới
-import Step2Stamp from '@/components/create/Step2Stamp';       // Component Tem mới
+import Step1Envelope from '@/components/create/Step1Envelope';
+import Step2Stamp from '@/components/create/Step2Stamp';
 import Step3Message from '@/components/create/Step3Message';
 import Step4Photos from '@/components/create/Step4Photos';
 import Step5Music from '@/components/create/Step5Music';
@@ -25,16 +25,16 @@ import { useCreateCard } from '@/hooks/useCreateCard';
 const pageVariants = {
   initial: { opacity: 0, x: 20, scale: 0.99 },
   animate: { opacity: 1, x: 0, scale: 1 },
-  exit: { opacity: 0, x: -20, scale: 0.99 }
+  exit: { opacity: 0, x: -20, scale: 0.99 },
 };
 
-const pageTransition = {
-  type: "spring",
+const pageTransition: Transition = {
+  type: 'spring',
   stiffness: 300,
-  damping: 30
+  damping: 30,
 };
 
-// Component chính (Wrap Suspense để dùng useSearchParams an toàn)
+// Wrapper để dùng useSearchParams an toàn
 export default function CreatePageWrapper() {
   return (
     <Suspense fallback={<Loading text="Đang tải dữ liệu..." />}>
@@ -47,13 +47,15 @@ function CreatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
-  
+
   const {
     state,
     currentStep,
     setTemplateById,
+    setEnvelopeById,
+    setStampById,
+    setMusicById,
     selectEnvelope,
-    selectLiner, // Logic lớp lót mới
     selectStamp,
     updateMessage,
     addPhoto,
@@ -70,120 +72,262 @@ function CreatePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
 
-  // 1. Kiểm tra Auth & Template ID khi vào trang
+  // ⛔ CHỐT HẠ: không cho init chạy lặp
+  const initOnceRef = useRef(false);
+
+  // ─────────────────────────────────────────────
+  // INIT: Auth + Draft / Template
+  // ─────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
+    if (initOnceRef.current) return;
 
-    if (!user) {
-      router.push('/auth?redirect=/create');
-      return;
-    }
-
+    const draftId = searchParams.get('draftId');
     const templateId = searchParams.get('templateId');
-    if (!templateId) {
-      // Chưa chọn mẫu -> Về trang Gallery
-      router.push('/templates');
+
+    // Chưa login → redirect auth
+    if (!user) {
+      const redirect =
+        draftId
+          ? `/create?draftId=${encodeURIComponent(draftId)}`
+          : templateId
+          ? `/create?templateId=${encodeURIComponent(templateId)}`
+          : '/templates';
+
+      router.replace(`/auth?redirect=${encodeURIComponent(redirect)}`);
       return;
     }
 
-    // Set template vào state
-    setTemplateById(templateId).then(() => {
-      setIsInitializing(false);
-    });
+    initOnceRef.current = true;
 
-  }, [user, authLoading, router, searchParams]);
+    const run = async () => {
+      setIsInitializing(true);
 
-  // Xử lý thoát
-  const handleExit = () => {
-    if (currentStep > 1) {
-      setShowExitModal(true);
-    } else {
-      router.push('/templates');
-    }
+      try {
+        // A) Có draftId → load draft
+        if (draftId) {
+          const res = await fetch(`/api/card-drafts/${draftId}`);
+          const text = await res.text();
+          const json = text ? JSON.parse(text) : null;
+
+          if (!res.ok || !json?.data) {
+            router.replace('/templates');
+            return;
+          }
+
+          const d = json.data;
+
+          if (d.template_id) await setTemplateById(d.template_id);
+          if (d.envelope_id) await setEnvelopeById(d.envelope_id);
+          if (d.stamp_id) await setStampById(d.stamp_id);
+          if (d.music_id) await setMusicById(d.music_id);
+
+          updateMessage({
+            recipientName: d.recipient_name || '',
+            senderName: d.sender_name || '',
+            message: d.content || '',
+            fontStyle: d.font_style || 'font-dancing',
+            textEffect: d.text_effect || 'none',
+            photos: Array.isArray(d.photos) ? d.photos : [],
+            signatureData: d.signature_data || null,
+          });
+
+          return;
+        }
+
+        // B) Có templateId → tạo draft
+        if (templateId) {
+          const res = await fetch('/api/card-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          });
+
+          const text = await res.text();
+          const json = text ? JSON.parse(text) : null;
+
+          if (!res.ok || !json?.data?.id) {
+            router.replace(`/create?templateId=${templateId}`);
+            return;
+          }
+
+          router.replace(`/create?draftId=${json.data.id}`);
+          return;
+        }
+
+        // C) Không có gì → về templates
+        router.replace('/templates');
+      } catch (e) {
+        console.error('Init create failed:', e);
+        router.replace('/templates');
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    run();
+  }, [
+    authLoading,
+    user,
+    router,
+    searchParams,
+    setTemplateById,
+    setEnvelopeById,
+    setStampById,
+    setMusicById,
+    updateMessage,
+  ]);
+
+  // AUTO-SAVE DRAFT (debounce) - stable deps (fix "deps changed size")
+const draftId = searchParams.get('draftId') ?? '';
+
+// Gom mọi thứ cần autosave vào 1 key ổn định (deps luôn cố định 2 phần tử)
+const autosaveKey = useMemo(() => {
+  // IMPORTANT: luôn trả về string (kể cả khi photos undefined)
+  const payload = {
+    template_id: state.templateId ?? null,
+    envelope_id: state.envelopeId ?? null,
+    stamp_id: state.stampId ?? null,
+    music_id: state.musicId ?? null,
+    recipient_name: state.recipientName ?? '',
+    sender_name: state.senderName ?? '',
+    content: state.message ?? '',
+    font_style: state.fontStyle ?? 'serif',
+    text_effect: state.textEffect ?? null,
+    photos: Array.isArray(state.photos) ? state.photos : [], // luôn là array
   };
 
-  // Gửi thiệp
+  return JSON.stringify(payload);
+}, [
+  state.templateId,
+  state.envelopeId,
+  state.stampId,
+  state.musicId,
+  state.recipientName,
+  state.senderName,
+  state.message,
+  state.fontStyle,
+  state.textEffect,
+  state.photos,
+]);
+
+useEffect(() => {
+  if (!draftId) return;
+
+  const controller = new AbortController();
+
+  const t = window.setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/card-drafts/${encodeURIComponent(draftId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: autosaveKey, // autosaveKey chính là JSON string payload
+        signal: controller.signal,
+      });
+
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : null;
+
+      if (!res.ok) {
+        console.error('autosave failed', { status: res.status, body: json ?? text });
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('autosave exception', err);
+    }
+  }, 600);
+
+  return () => {
+    controller.abort();
+    window.clearTimeout(t);
+  };
+}, [draftId, autosaveKey]); // ✅ deps luôn cố định 2 phần tử
+
+
+
+  // ─────────────────────────────────────────────
+  // SEND CARD
+  // ─────────────────────────────────────────────
   const handleSendCard = async (): Promise<string> => {
     if (!user) throw new Error('Chưa đăng nhập');
+
+    const draftId = searchParams.get('draftId');
+    if (!draftId) throw new Error('Thiếu draftId');
+
     setIsSubmitting(true);
 
     try {
-      const cardData = {
-        user_id: user.id,
-        template_id: state.templateId,
-        recipient_name: state.recipientName,
-        sender_name: state.senderName,
-        message: state.message,
-        font_style: state.fontStyle,
-        text_effect: state.textEffect,
-        photos: state.photos,
-        signature_data: state.signatureData,
-        envelope_id: state.envelopeId,
-        liner_pattern: state.linerPattern, // Lưu thêm lớp lót
-        stamp_id: state.stampId,
-        music_id: state.musicId,
-        tym_cost: state.totalTymCost,
-      };
-
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cardData),
+        body: JSON.stringify({ draftId }),
       });
-      
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      return result.data.id;
-    } catch (error) {
-      console.error(error);
-      throw error;
+
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : null;
+
+      if (!res.ok || !json?.data?.id) {
+        throw new Error(json?.error || 'Create card failed');
+      }
+
+      return json.data.id as string;
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ─────────────────────────────────────────────
+  // LOADING STATES
+  // ─────────────────────────────────────────────
   if (authLoading || isInitializing || isSubmitting) {
-    return <Loading text={isSubmitting ? "Đang gửi tấm lòng..." : "Đang vào xưởng thiết kế..."} />;
+    return (
+      <Loading
+        text={
+          isSubmitting
+            ? 'Đang gửi tấm lòng...'
+            : 'Đang vào xưởng thiết kế...'
+        }
+      />
+    );
   }
 
   if (!user) return null;
 
+  // ─────────────────────────────────────────────
+  // UI (GIỮ NGUYÊN)
+  // ─────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 overflow-x-hidden pb-32">
-      
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-rose-100">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <button
-            onClick={handleExit}
-            className="flex items-center gap-2 text-gray-600 hover:text-rose-500 transition group"
+            onClick={() =>
+              currentStep > 1 ? setShowExitModal(true) : router.push('/templates')
+            }
+            className="flex items-center gap-2 text-gray-600 hover:text-rose-500"
           >
-            <div className="p-1.5 rounded-full group-hover:bg-rose-50 transition-colors">
-              <ChevronLeft className="w-5 h-5" />
-            </div>
-            <span className="hidden sm:inline font-medium">Thoát</span>
+            <ChevronLeft className="w-5 h-5" />
+            <span className="hidden sm:inline">Thoát</span>
           </button>
 
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 text-rose-500 fill-current" />
-            <span className="font-bold text-gray-800 text-lg">
+            <span className="font-bold">
               {state.template?.name || 'Tạo Thiệp'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 px-4 py-1.5 bg-rose-50 border border-rose-100 rounded-full">
-            <span className="text-sm">💜</span>
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-rose-50 rounded-full">
+            <span>💜</span>
             <span className="font-bold text-rose-600">{user.points}</span>
           </div>
         </div>
       </header>
 
-      {/* Step Indicator */}
       <div className="pt-6 pb-2">
         <StepIndicator currentStep={currentStep} />
       </div>
 
-      {/* Main Content */}
       <div className="relative w-full max-w-7xl mx-auto px-4 mt-6">
         <AnimatePresence mode="wait">
           <motion.div
@@ -194,27 +338,20 @@ function CreatePage() {
             exit="exit"
             transition={pageTransition}
           >
-            {/* --- STEP 1: PHONG BÌ & LỚP LÓT (3D) --- */}
             {currentStep === 1 && (
               <Step1Envelope
                 selectedEnvelope={state.envelope}
-                selectedLiner={state.linerPattern}
                 onSelectEnvelope={selectEnvelope}
-                onSelectLiner={selectLiner}
               />
             )}
-
-            {/* --- STEP 2: TEM THƯ --- */}
             {currentStep === 2 && (
               <Step2Stamp
                 envelope={state.envelope}
-                liner={state.linerPattern}
+                liner={null}
                 selectedStamp={state.stamp}
                 onSelectStamp={selectStamp}
               />
             )}
-
-            {/* --- STEP 3: LỜI CHÚC --- */}
             {currentStep === 3 && (
               <Step3Message
                 recipientName={state.recipientName}
@@ -225,8 +362,6 @@ function CreatePage() {
                 onUpdate={updateMessage}
               />
             )}
-
-            {/* --- STEP 4: ẢNH --- */}
             {currentStep === 4 && (
               <Step4Photos
                 photos={state.photos}
@@ -234,24 +369,25 @@ function CreatePage() {
                 onRemovePhoto={removePhoto}
               />
             )}
-
-            {/* --- STEP 5: NHẠC --- */}
             {currentStep === 5 && (
               <Step5Music
                 selectedMusicId={state.musicId}
                 onSelectMusic={selectMusic}
               />
             )}
-
-            {/* --- STEP 6: CHỮ KÝ --- */}
             {currentStep === 6 && (
               <Step6Signature
                 signatureData={state.signatureData}
-                onSetSignature={setSignature}
+                onSetSignature={(data) => {
+                  if (data === null) {
+                    setSignature('');
+                     return;
+                  }
+                  setSignature(data);
+                }}
               />
-            )}
 
-            {/* --- STEP 7: XEM TRƯỚC --- */}
+            )}
             {currentStep === 7 && (
               <Step7Preview
                 state={state}
@@ -263,85 +399,65 @@ function CreatePage() {
         </AnimatePresence>
       </div>
 
-      {/* Bottom Navigation */}
       {currentStep < 7 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-gray-200 p-4 z-50 safe-area-bottom">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-              <span className="text-xs sm:text-sm text-gray-500">Chi phí:</span>
-              <div className="flex items-center gap-1">
-                <span className="text-sm">💜</span>
-                <span className="font-bold text-rose-600 text-lg">
-                  {totalTymCost} Tym
-                </span>
-              </div>
+        <div className="fixed bottom-0 left-0 right-0 bg-white/90 border-t p-4 z-50">
+          <div className="max-w-4xl mx-auto flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span>💜</span>
+              <span className="font-bold text-rose-600">
+                {totalTymCost} Tym
+              </span>
             </div>
-
-            <div className="flex items-center gap-3">
+            <div className="flex gap-3">
               <button
                 onClick={prevStep}
-                // Nếu ở bước 1 mà bấm quay lại -> hỏi thoát
-                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+                className="px-6 py-3 bg-gray-100 rounded-xl"
               >
-                <ChevronLeft className="w-4 h-4 inline mr-1" />
-                {currentStep === 1 ? 'Thoát' : 'Quay lại'}
+                Quay lại
               </button>
-              
               <button
                 onClick={nextStep}
                 disabled={!canProceed(currentStep)}
-                className={`
-                  px-8 py-3 rounded-xl font-medium flex items-center gap-2 transition-all shadow-md
-                  ${canProceed(currentStep)
-                    ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white hover:shadow-lg hover:shadow-rose-200'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                  }
-                `}
+                className={`px-8 py-3 rounded-xl ${
+                  canProceed(currentStep)
+                    ? 'bg-rose-500 text-white'
+                    : 'bg-gray-200 text-gray-400'
+                }`}
               >
                 Tiếp tục
-                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Exit Modal */}
       <AnimatePresence>
         {showExitModal && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
             onClick={() => setShowExitModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full"
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             >
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-8 h-8 text-amber-500" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Dừng thiết kế?</h3>
-                <p className="text-gray-500 mt-2 text-sm">
-                  Tiến trình của bạn chưa được lưu. Bạn có chắc chắn muốn rời đi không?
+              <div className="text-center">
+                <AlertCircle className="w-10 h-10 mx-auto text-amber-500" />
+                <h3 className="text-lg font-bold mt-2">Dừng thiết kế?</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Tiến trình của bạn sẽ bị mất.
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowExitModal(false)}
-                  className="flex-1 py-3 bg-gray-100 rounded-xl font-medium text-gray-700"
+                  className="flex-1 py-3 bg-gray-100 rounded-xl"
                 >
                   Ở lại
                 </button>
                 <button
                   onClick={() => router.push('/templates')}
-                  className="flex-1 py-3 bg-rose-500 rounded-xl font-medium text-white hover:bg-rose-600"
+                  className="flex-1 py-3 bg-rose-500 text-white rounded-xl"
                 >
                   Thoát
                 </button>

@@ -9,13 +9,6 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 /* Primary Vietnamese Font - PHẢI ĐẶT ĐẦU TIÊN */
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700&display=swap');
-
-/* Display & Decorative Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Crimson+Pro:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;1,200;1,300;1,400;1,500;1,600;1,700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&family=Lexend:wght@300;400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&display=swap');
-
-/* Vietnamese Script Font Alternative */
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -143,9 +136,12 @@ h1, h2, h3, h4, h5, h6 {
 .text-vn,
 [lang="vi"] {
   font-family: var(--font-vn);
-  font-feature-settings: "kern" 1, "liga" 1;
+  /* IMPORTANT: đừng override thiếu feature, nếu không dấu VN sẽ bị tách */
+  font-feature-settings: "kern" 1, "liga" 1, "ccmp" 1, "mark" 1, "mkmk" 1;
+  font-kerning: normal;
   text-rendering: optimizeLegibility;
 }
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    5. VINTAGE TEXTURE & PATTERNS

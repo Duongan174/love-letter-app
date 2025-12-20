@@ -1,53 +1,54 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { supabaseServer } from '@/lib/supabase/server';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+function resolveEmail(user: any): string | null {
+  const meta = user?.user_metadata ?? {};
+  const email = user?.email ?? meta.email ?? null;
+  if (!email || typeof email !== 'string' || !email.trim()) return null;
+  return email.trim();
+}
 
-export default function AuthCallbackPage() {
-  const router = useRouter();
+export default async function AuthCallbackPage({
+  searchParams,
+}: {
+  searchParams: { code?: string; next?: string };
+}) {
+  const supabase = await supabaseServer();
 
-  useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          router.replace('/auth?error=auth_failed');
-          return;
-        }
+  const code = searchParams.code;
+  const next = searchParams.next ?? '/';
 
-        if (session?.user) {
-          // Dùng đúng tên cột: name, avatar (không phải full_name, avatar_url)
-          await supabase.from('users').upsert({
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || 'User',
-            avatar: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null,
-            provider: session.user.app_metadata?.provider || 'google',
-            points: 100,
-            role: 'user',
-          }, { onConflict: 'id' });
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) console.error('exchangeCodeForSession error:', error.message);
+  }
 
-          router.replace('/dashboard');
-        } else {
-          router.replace('/auth');
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        router.replace('/auth');
-      }
-    };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    setTimeout(handleCallback, 1000);
-  }, [router]);
+  if (user) {
+    const meta: any = user.user_metadata ?? {};
+    const appMeta: any = user.app_metadata ?? {};
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-50">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-rose-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-gray-600">Đang xử lý đăng nhập...</p>
-      </div>
-    </div>
-  );
+    const email = resolveEmail(user);
+
+    // ✅ nếu DB email NOT NULL mà không có email -> skip upsert để khỏi lỗi
+    if (email) {
+      await supabase
+        .from('users')
+        .upsert(
+          {
+            id: user.id,
+            email, // ✅ luôn string
+            name: meta.full_name ?? meta.name ?? null,
+            avatar: meta.avatar_url ?? null,
+            provider: appMeta.provider ?? null,
+          },
+          { onConflict: 'id' }
+        );
+    }
+  }
+
+  redirect(next);
 }

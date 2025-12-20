@@ -1,4 +1,3 @@
-// components/ui/Loading.tsx
 'use client';
 
 import { motion } from 'framer-motion';
@@ -8,7 +7,10 @@ import { Heart, Feather } from 'lucide-react';
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════════
 interface LoadingProps {
+  /** Message chính (khuyến nghị dùng) */
   message?: string;
+  /** Backward-compat: cho phép <Loading text="..." /> */
+  text?: string;
   fullScreen?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
@@ -16,12 +18,15 @@ interface LoadingProps {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function Loading({ 
-  message = 'Đang tải...', 
+export default function Loading({
+  message,
+  text,
   fullScreen = true,
-  size = 'md' 
+  size = 'md',
 }: LoadingProps) {
-  
+  // Ưu tiên text -> message -> default
+  const resolvedMessage = text ?? message ?? 'Đang tải...';
+
   const sizeConfig = {
     sm: {
       container: 'w-12 h-12',
@@ -38,7 +43,7 @@ export default function Loading({
       icon: 'w-12 h-12',
       text: 'text-lg',
     },
-  };
+  } as const;
 
   const config = sizeConfig[size];
 
@@ -49,7 +54,7 @@ export default function Loading({
         {/* Outer rotating ring */}
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
           className={`${config.container} rounded-full border-2 border-gold/30`}
         >
           {/* Gold accent dots */}
@@ -60,25 +65,28 @@ export default function Loading({
         {/* Inner pulsing circle */}
         <motion.div
           animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute inset-2 rounded-full bg-burgundy/10 flex items-center justify-center"
         >
           {/* Heart icon */}
           <motion.div
             animate={{ scale: [1, 0.9, 1] }}
-            transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <Heart className={`${config.icon} text-burgundy`} fill="currentColor" />
+            <Heart
+              className={`${config.icon} text-burgundy`}
+              fill="currentColor"
+            />
           </motion.div>
         </motion.div>
 
         {/* Floating feather */}
         <motion.div
-          animate={{ 
+          animate={{
             y: [-5, 5, -5],
-            rotate: [0, 10, -10, 0]
+            rotate: [0, 10, -10, 0],
           }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute -top-4 -right-4"
         >
           <Feather className="w-5 h-5 text-gold/60" />
@@ -92,20 +100,20 @@ export default function Loading({
           animate={{ opacity: 1 }}
           className={`font-elegant text-ink/60 ${config.text}`}
         >
-          {message}
+          {resolvedMessage}
         </motion.p>
-        
+
         {/* Animated dots */}
         <div className="flex items-center justify-center gap-1 mt-2">
           {[0, 1, 2].map((i) => (
             <motion.span
               key={i}
               animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ 
-                duration: 1.2, 
-                repeat: Infinity, 
+              transition={{
+                duration: 1.2,
+                repeat: Infinity,
                 delay: i * 0.2,
-                ease: "easeInOut"
+                ease: 'easeInOut',
               }}
               className="w-1.5 h-1.5 rounded-full bg-gold"
             />
@@ -119,9 +127,13 @@ export default function Loading({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-cream">
         {/* Background decoration */}
-        <div className="absolute top-8 left-8 text-4xl text-gold/10 font-serif">❧</div>
-        <div className="absolute bottom-8 right-8 text-4xl text-gold/10 font-serif rotate-180">❧</div>
-        
+        <div className="absolute top-8 left-8 text-4xl text-gold/10 font-serif">
+          ❧
+        </div>
+        <div className="absolute bottom-8 right-8 text-4xl text-gold/10 font-serif rotate-180">
+          ❧
+        </div>
+
         {content}
       </div>
     );
@@ -140,7 +152,7 @@ interface SkeletonProps {
 
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
-    <div 
+    <div
       className={`
         bg-gradient-to-r from-cream via-paper to-cream 
         bg-[length:200%_100%] animate-[shimmer_1.5s_infinite]
@@ -175,10 +187,13 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
         <Skeleton className="h-4 w-20" />
         <Skeleton className="h-4 w-28" />
       </div>
-      
+
       {/* Rows */}
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex gap-4 p-4 border-b border-gold/10">
+        <div
+          key={i}
+          className="flex gap-4 p-4 border-b border-gold/10"
+        >
           <div className="flex items-center gap-3 flex-1">
             <Skeleton className="h-10 w-10 rounded-full" />
             <div className="space-y-2 flex-1">
@@ -200,23 +215,23 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export function Spinner({ className = '' }: { className?: string }) {
   return (
-    <svg 
-      className={`animate-spin text-burgundy ${className}`} 
-      xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
+    <svg
+      className={`animate-spin text-burgundy ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
       viewBox="0 0 24 24"
     >
-      <circle 
-        className="opacity-25" 
-        cx="12" 
-        cy="12" 
-        r="10" 
-        stroke="currentColor" 
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
         strokeWidth="4"
       />
-      <path 
-        className="opacity-75" 
-        fill="currentColor" 
+      <path
+        className="opacity-75"
+        fill="currentColor"
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       />
     </svg>

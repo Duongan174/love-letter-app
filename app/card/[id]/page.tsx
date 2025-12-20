@@ -6,183 +6,268 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Envelope3D from '@/components/create/Envelope3D';
 import { ChevronRight, ChevronLeft, Heart, X, Sparkles } from 'lucide-react';
 import Loading from '@/components/ui/Loading';
+import { supabase } from '@/lib/supabase';
 
-// Mock Data (Thay bằng fetch Supabase sau)
-const mockData = {
-  templateUrl: "https://images.unsplash.com/photo-1518199266791-5375a83190b7",
-  photoUrl: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e",
-  pages: [
-    "Chào cậu, tớ có điều này muốn nói...",
-    "Từ ngày gặp cậu, cuộc sống tớ thêm nhiều màu sắc.",
-    "Cảm ơn cậu vì đã luôn ở bên tớ nhé!",
-    "Mong những điều tốt đẹp nhất sẽ đến với cậu."
-  ],
-  signature: "Minh Anh",
-  wish: "Happy Birthday!",
-  envelope_color: "#f8b4c4",
-  stamp_url: "https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg",
-  liner_pattern: "https://www.transparenttextures.com/patterns/cubes.png"
+type ViewData = {
+  templateUrl: string | null;
+  photoUrl: string | null;
+  pages: string[];
+  signature: string | null;
+  wish: string | null;
+  envelope_color: string;
+  stamp_url: string | null;
+  texture: string | null;
 };
+
+function splitToPages(content: string): string[] {
+  const blocks = content
+    .split(/\n{2,}/g)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (blocks.length > 0) return blocks;
+
+  return content
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
 
 export default function CardViewPage({ params }: { params: { id: string } }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isReading, setIsReading] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ViewData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Giả lập load dữ liệu
-    setTimeout(() => setData(mockData), 1000);
-  }, []);
+    const run = async () => {
+      setLoading(true);
 
-  if (!data) return <Loading text="Đang nhận thư..." />;
+      const { data: card, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('id', params.id)
+        .single();
 
-  const handleOpen = () => {
-    if (!isOpen) {
-      setIsOpen(true);
-      // Sau 1.5s (khi hiệu ứng trượt xong) -> Vào chế độ đọc
-      setTimeout(() => setIsReading(true), 1200);
-    }
-  };
+      if (error || !card) {
+        setData(null);
+        setLoading(false);
+        return;
+      }
+
+      // fetch related (minimal, tránh phụ thuộc join)
+      const [tplRes, envRes, stampRes] = await Promise.all([
+        card.template_id
+          ? supabase.from('card_templates').select('thumbnail,preview_url').eq('id', card.template_id).single()
+          : Promise.resolve({ data: null as any }),
+        card.envelope_id
+          ? supabase.from('envelopes').select('color,texture').eq('id', card.envelope_id).single()
+          : Promise.resolve({ data: null as any }),
+        card.stamp_id
+          ? supabase.from('stamps').select('image_url').eq('id', card.stamp_id).single()
+          : Promise.resolve({ data: null as any }),
+      ]);
+
+      const templateUrl =
+        tplRes.data?.preview_url ||
+        tplRes.data?.thumbnail ||
+        null;
+
+      const photoUrl = Array.isArray(card.photos) && card.photos.length > 0 ? card.photos[0] : null;
+
+      setData({
+        templateUrl,
+        photoUrl,
+        pages: splitToPages(card.content || ''),
+        signature: card.sender_name || null,
+        wish: null,
+        envelope_color: envRes.data?.color || card.envelope_color || '#f8b4c4',
+        stamp_url: stampRes.data?.image_url || null,
+        texture: envRes.data?.texture || null,
+      });
+
+      setLoading(false);
+    };
+
+    run().catch(() => setLoading(false));
+  }, [params.id]);
+
+  if (loading) return <Loading text="Đang mở thiệp..." />;
+
+  if (!data) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        <div>
+          <p className="text-xl font-semibold text-gray-800 mb-2">Không tìm thấy thiệp</p>
+          <p className="text-gray-600">Link có thể sai hoặc thiệp chưa được publish.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#111] flex flex-col items-center justify-center p-4 overflow-hidden relative">
-      
-      {/* Background hiệu ứng */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]" />
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 p-4 flex items-center justify-center">
+      {/* Envelope */}
+      <div className="max-w-lg w-full">
+        <div className="relative">
+          <Envelope3D
+            color={data.envelope_color}
+            texture={data.texture}
+            stampUrl={data.stamp_url}
+            isOpen={isOpen}
+          />
 
-      <AnimatePresence>
-        {/* GIAI ĐOẠN 1: PHONG BÌ */}
-        {!isReading && (
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 1.2, opacity: 0 }}
-            className="cursor-pointer z-10"
-            onClick={handleOpen}
-          >
-            <Envelope3D 
-              color={data.envelope_color}
-              isOpen={isOpen}
-              stampUrl={data.stamp_url}
-              linerPattern={data.liner_pattern}
-            />
-            
-            <motion.p 
-              className="text-white/50 text-center mt-12 font-lexend text-sm tracking-widest uppercase"
-              animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 2, repeat: Infinity }}
+          {!isOpen && (
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setIsOpen(true)}
+              className="absolute inset-0 flex items-center justify-center"
             >
-              {isOpen ? "Đang mở thư..." : "Chạm để mở thư"}
-            </motion.p>
-          </motion.div>
-        )}
+              <span className="px-6 py-3 rounded-2xl bg-white/80 backdrop-blur border border-rose-100 shadow text-rose-600 font-semibold flex items-center gap-2">
+                <Sparkles className="w-5 h-5" />
+                Mở thư
+              </span>
+            </motion.button>
+          )}
+        </div>
 
-        {/* GIAI ĐOẠN 2: ĐỌC THIỆP (FLIPBOOK) */}
-        {isReading && (
-          <FlipBook data={data} onClose={() => window.location.reload()} />
-        )}
-      </AnimatePresence>
+        <AnimatePresence>
+          {isOpen && !isReading && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              className="mt-6 text-center"
+            >
+              <button
+                onClick={() => setIsReading(true)}
+                className="px-6 py-3 rounded-2xl bg-rose-500 text-white font-semibold shadow hover:bg-rose-600 transition flex items-center justify-center gap-2 w-full"
+              >
+                <Heart className="w-5 h-5" />
+                Đọc thư
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isReading && (
+            <ReaderModal
+              data={data}
+              onClose={() => {
+                setIsReading(false);
+                setIsOpen(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
 
-// === COMPONENT SÁCH LẬT (FLIPBOOK) - GIỮ NGUYÊN ===
-function FlipBook({ data, onClose }: { data: any, onClose: () => void }) {
+function ReaderModal({ data, onClose }: { data: ViewData; onClose: () => void }) {
   const [page, setPage] = useState(0);
-  
-  // Logic trang: 0(Bìa) -> 1(Ảnh) -> 2...(Nội dung) -> Cuối(Chữ ký)
+
   const contentPages = data.pages || [];
   const hasPhoto = !!data.photoUrl;
+
+  // 0 = cover, 1 = photo (optional), 2.. = content, last = signature
   const totalPages = 1 + (hasPhoto ? 1 : 0) + contentPages.length + 1;
 
   const nextPage = () => setPage(p => Math.min(p + 1, totalPages - 1));
   const prevPage = () => setPage(p => Math.max(0, p - 1));
 
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.8 }}
-      className="relative z-20 w-full max-w-md aspect-[2/3] perspective-1000"
-    >
-      <button onClick={onClose} className="absolute -top-12 right-0 text-white/50 hover:text-white p-2">
-        <X />
-      </button>
+  const renderPage = () => {
+    // cover
+    if (page === 0) {
+      return (
+        <div className="h-full flex items-center justify-center text-center p-8">
+          <div>
+            <p className="text-3xl font-bold text-rose-600 mb-2">With Love</p>
+            <p className="text-gray-600">Vuốt / bấm để đọc</p>
+          </div>
+        </div>
+      );
+    }
 
-      <div 
-        className="w-full h-full relative cursor-pointer shadow-2xl rounded-lg overflow-hidden bg-[#fffbf0]"
-        onClick={nextPage}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={page}
-            initial={{ rotateY: -90, opacity: 0 }}
-            animate={{ rotateY: 0, opacity: 1 }}
-            exit={{ rotateY: 90, opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0 flex flex-col"
-          >
-            {/* TRANG BÌA */}
-            {page === 0 && (
-              <div className="w-full h-full relative">
-                <img src={data.templateUrl} className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <div className="bg-white/90 backdrop-blur p-6 rounded-xl shadow-lg text-center">
-                    <Heart className="w-10 h-10 text-rose-500 mx-auto mb-2 animate-pulse" fill="currentColor" />
-                    <h2 className="font-playfair text-2xl font-bold text-gray-800">Gửi Người Thương</h2>
-                    <p className="text-xs text-gray-500 mt-1">Chạm để mở</p>
-                  </div>
-                </div>
-              </div>
-            )}
+    // photo
+    if (hasPhoto && page === 1) {
+      return (
+        <div className="h-full p-6 flex items-center justify-center">
+          <img src={data.photoUrl!} className="max-h-full max-w-full rounded-2xl shadow object-cover" />
+        </div>
+      );
+    }
 
-            {/* TRANG ẢNH */}
-            {hasPhoto && page === 1 && (
-              <div className="w-full h-full flex items-center justify-center bg-black p-4">
-                <div className="relative bg-white p-2 pb-12 shadow-lg rotate-1 transform">
-                  <img src={data.photoUrl} className="max-w-full max-h-[400px] object-cover" />
-                  <p className="absolute bottom-4 left-0 right-0 text-center font-dancing text-gray-600">Kỷ niệm của chúng ta</p>
-                </div>
-              </div>
-            )}
+    // content pages
+    const contentIndex = page - 1 - (hasPhoto ? 1 : 0);
+    if (contentIndex >= 0 && contentIndex < contentPages.length) {
+      return (
+        <div className="h-full p-8 flex items-center justify-center">
+          <p className="text-lg leading-relaxed text-gray-800 text-center whitespace-pre-wrap">
+            {contentPages[contentIndex]}
+          </p>
+        </div>
+      );
+    }
 
-            {/* TRANG NỘI DUNG */}
-            {page >= (hasPhoto ? 2 : 1) && page < totalPages - 1 && (
-              <div className="w-full h-full p-8 flex flex-col justify-center items-center text-center bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')]">
-                <Sparkles className="w-6 h-6 text-amber-400 mb-4" />
-                <p className="font-dancing text-2xl md:text-3xl text-gray-800 leading-loose">
-                  {contentPages[page - (hasPhoto ? 2 : 1)]}
-                </p>
-                <div className="mt-8 text-xs text-rose-300 font-bold">
-                  — {page} —
-                </div>
-              </div>
-            )}
-
-            {/* TRANG CUỐI */}
-            {page === totalPages - 1 && (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 text-center p-8">
-                <h2 className="text-3xl font-bold text-gray-900 font-playfair mb-2">{data.wish}</h2>
-                <div className="w-16 h-1 bg-rose-300 my-6 rounded-full" />
-                <p className="text-sm text-gray-500 uppercase tracking-widest mb-4">Gửi bởi</p>
-                <p className="text-5xl font-dancing text-rose-600 transform -rotate-2">{data.signature}</p>
-                
-                <button 
-                  onClick={(e) => { e.stopPropagation(); alert('Tính năng gửi lại đang phát triển!'); }}
-                  className="mt-16 px-6 py-3 bg-white text-rose-500 rounded-full font-bold shadow-md hover:shadow-lg transition"
-                >
-                  Gửi lại thiệp này
-                </button>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-
-        <div className="absolute bottom-4 w-full flex justify-between px-6 text-gray-400 text-xs font-bold pointer-events-none">
-          <span className={page === 0 ? 'opacity-0' : ''}>← TRƯỚC</span>
-          <span className={page === totalPages - 1 ? 'opacity-0' : ''}>TIẾP THEO →</span>
+    // signature
+    return (
+      <div className="h-full p-8 flex items-center justify-center text-center">
+        <div>
+          <p className="text-gray-600 mb-3">Thân ái,</p>
+          <p className="text-3xl font-bold text-rose-600">{data.signature || '❤️'}</p>
         </div>
       </div>
+    );
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.96, y: 24 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 24 }}
+        className="w-full max-w-2xl h-[80vh] bg-white rounded-3xl shadow-xl overflow-hidden relative"
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center z-10"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="h-full">{renderPage()}</div>
+
+        <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-3">
+          <button
+            onClick={prevPage}
+            disabled={page === 0}
+            className="w-12 h-12 rounded-full bg-white shadow border disabled:opacity-50 flex items-center justify-center"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <span className="px-4 py-2 rounded-full bg-white shadow border text-sm text-gray-700">
+            {page + 1} / {totalPages}
+          </span>
+
+          <button
+            onClick={nextPage}
+            disabled={page === totalPages - 1}
+            className="w-12 h-12 rounded-full bg-white shadow border disabled:opacity-50 flex items-center justify-center"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }

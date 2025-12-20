@@ -1,148 +1,226 @@
-// hooks/useAuth.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-// Đảm bảo bạn có file types định nghĩa User, nếu chưa có thì thay User bằng any tạm thời
-import { User } from '@/types'; 
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { User as SbUser } from '@supabase/supabase-js';
+import { supabaseBrowser } from '@/lib/supabase/client';
 
-export function useAuth() {
-  const [user, setUser] = useState<User | any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+type Role = 'admin' | 'user' | string;
 
-  // Hàm xử lý: Lấy thông tin User từ DB, nếu chưa có thì tạo mới
-  const fetchUserProfile = async (sessionUser: any) => {
-    if (!sessionUser) return null;
+export type AppUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  avatar: string | null;
+  provider: string | null;
+  points: number; // ✅ DB đang là points
+  role: Role;
+};
 
-    try {
-      // 1. Tìm user trong bảng 'users'
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .single();
+type AuthCtx = {
+  user: AppUser | null;
+  loading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+};
 
-      if (data) {
-        return data;
-      } 
-      
-      // 2. Nếu lỗi là do không tìm thấy (PGRST116) -> Tạo mới
-      if (error?.code === 'PGRST116') {
-        const newUser = {
-          id: sessionUser.id,
-          email: sessionUser.email || '',
-          name: sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || 'User',
-          avatar: sessionUser.user_metadata?.avatar_url || sessionUser.user_metadata?.picture || null,
-          role: 'user',
-          points: 100, // Tặng 100 tym
-          provider: sessionUser.app_metadata?.provider || 'email',
-        };
+const AuthContext = createContext<AuthCtx | null>(null);
 
-        const { data: created, error: createError } = await supabase
-          .from('users')
-          .insert([newUser])
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Lỗi tạo user mới:', createError);
-          return null;
-        }
-        return created;
-      }
-      
-      return null;
-    } catch (err) {
-      console.error('Lỗi fetch user:', err);
-      return null;
-    }
+function safeSbError(err: unknown) {
+  if (!err || typeof err !== 'object') return { message: String(err) };
+  const e = err as any;
+  return {
+    message: e.message,
+    code: e.code,
+    details: e.details,
+    hint: e.hint,
+    status: e.status,
   };
+}
+
+function buildFallbackUser(sbUser: SbUser): AppUser {
+  const meta: any = sbUser.user_metadata ?? {};
+  const appMeta: any = sbUser.app_metadata ?? {};
+
+  return {
+    id: sbUser.id,
+    email: sbUser.email ?? null,
+    name: meta.full_name ?? meta.name ?? null,
+    avatar: meta.avatar_url ?? null,
+    provider: appMeta.provider ?? null,
+    points: 0,
+    role: 'user',
+  };
+}
+
+function resolveEmail(sbUser: SbUser): string | null {
+  const meta: any = sbUser.user_metadata ?? {};
+  // đa số OAuth có email, nhưng cứ phòng trường hợp
+  const email = sbUser.email ?? meta.email ?? null;
+  if (!email || typeof email !== 'string' || !email.trim()) return null;
+  return email.trim();
+}
+
+async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
+  const supabase = supabaseBrowser();
+
+  // ✅ đúng cột: points
+  const { data, error } = await supabase
+    .from('users')
+    .select('id,email,name,avatar,provider,points,role')
+    .eq('id', sbUser.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('fetch profile error:', safeSbError(error));
+    return buildFallbackUser(sbUser);
+  }
+
+  // nếu chưa có row -> tạo row tối thiểu
+  if (!data) {
+    const meta: any = sbUser.user_metadata ?? {};
+    const appMeta: any = sbUser.app_metadata ?? {};
+
+    const email = resolveEmail(sbUser);
+
+    // ✅ nếu DB email NOT NULL mà bạn không có email → không insert (tránh crash)
+    if (!email) return buildFallbackUser(sbUser);
+
+    const insertPayload = {
+      id: sbUser.id,
+      email, // ✅ luôn là string
+      name: meta.full_name ?? meta.name ?? null,
+      avatar: meta.avatar_url ?? null,
+      provider: appMeta.provider ?? null,
+    };
+
+    const ins = await supabase
+      .from('users')
+      .insert(insertPayload)
+      .select('id,email,name,avatar,provider,points,role')
+      .maybeSingle();
+
+    if (ins.error) {
+      console.error('create profile error:', safeSbError(ins.error));
+      return buildFallbackUser(sbUser);
+    }
+
+    if (!ins.data) return buildFallbackUser(sbUser);
+
+    return {
+      id: ins.data.id,
+      email: ins.data.email ?? null,
+      name: ins.data.name ?? null,
+      avatar: ins.data.avatar ?? null,
+      provider: ins.data.provider ?? null,
+      points: Number((ins.data as any).points ?? 0),
+      role: ((ins.data as any).role ?? 'user') as Role,
+    };
+  }
+
+  return {
+    id: data.id,
+    email: data.email ?? null,
+    name: data.name ?? null,
+    avatar: data.avatar ?? null,
+    provider: data.provider ?? null,
+    points: Number((data as any).points ?? 0),
+    role: ((data as any).role ?? 'user') as Role,
+  };
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const supabase = useMemo(() => supabaseBrowser(), []);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    const sbUser = data.user;
+
+    if (!sbUser) {
+      if (aliveRef.current) setUser(null);
+      return;
+    }
+
+    const prof = await fetchProfile(sbUser);
+    if (aliveRef.current) setUser(prof);
+  }, [supabase]);
 
   useEffect(() => {
-    let mounted = true;
-
-    // Hàm khởi tạo Auth
-    const initAuth = async () => {
+    (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          const profile = await fetchUserProfile(session.user);
-          if (mounted) setUser(profile);
-        } else {
-          if (mounted) setUser(null);
-        }
-      } catch (error) {
-        console.error("Auth init error:", error);
+        await refreshProfile();
       } finally {
-        if (mounted) setLoading(false);
+        if (aliveRef.current) setLoading(false);
       }
-    };
+    })();
 
-    initAuth();
-
-    // Lắng nghe thay đổi (Đăng nhập/Đăng xuất)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        // Chỉ fetch lại nếu chưa có user hoặc user thay đổi
-        const profile = await fetchUserProfile(session.user);
-        if (mounted) setUser(profile);
-      } else {
-        if (mounted) setUser(null);
-        // Nếu đăng xuất -> redirect (Tuỳ chọn)
-        if (event === 'SIGNED_OUT') {
-           router.push('/auth');
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_OUT') {
+        if (aliveRef.current) {
+          setUser(null);
+          setLoading(false);
         }
+        return;
       }
-      if (mounted) setLoading(false);
+
+      if (aliveRef.current) setLoading(true);
+      await refreshProfile();
+      if (aliveRef.current) setLoading(false);
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [router]);
+    return () => sub.subscription.unsubscribe();
+  }, [refreshProfile, supabase]);
 
-  // --- CÁC HÀM HÀNH ĐỘNG ---
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) console.error('signIn google error:', safeSbError(error));
+  }, [supabase]);
 
-  const signInWithFacebook = async () => {
+  const signInWithFacebook = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'facebook',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) alert(error.message);
-  };
+    if (error) console.error('signIn facebook error:', safeSbError(error));
+  }, [supabase]);
 
-  const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    });
-    if (error) alert(error.message);
-  };
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error('signOut error:', safeSbError(error));
+  }, [supabase]);
 
-  const signInWithTikTok = async () => {
-    alert('Tính năng đang bảo trì.');
-  };
+  const value: AuthCtx = useMemo(
+    () => ({ user, loading, signInWithGoogle, signInWithFacebook, signOut, refreshProfile }),
+    [user, loading, signInWithGoogle, signInWithFacebook, signOut, refreshProfile]
+  );
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push('/auth');
-  };
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
-  // Trả về trực tiếp, không dùng Context Provider nữa
-  return { 
-    user, 
-    loading, 
-    signInWithFacebook, 
-    signInWithGoogle, 
-    signInWithTikTok, 
-    signOut 
-  };
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within <AuthProvider />');
+  return ctx;
 }
