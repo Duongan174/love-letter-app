@@ -1,25 +1,28 @@
 'use client';
 
-import { useEffect, useState, Suspense, useRef, useMemo } from 'react';
+import { useEffect, useState, Suspense, useRef, useMemo, lazy } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence, type Transition } from 'framer-motion';
-import { Heart, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
-
+import { Heart, ChevronLeft, ChevronRight, AlertCircle, Crown } from 'lucide-react';
+import { splitLetterPages } from '@/hooks/useCreateCard';
 
 // Components
 import StepIndicator from '@/components/create/StepIndicator';
-import Step1Envelope from '@/components/create/Step1Envelope';
-import Step2Stamp from '@/components/create/Step2Stamp';
-import Step3Message from '@/components/create/Step3Message';
-import Step4Photos from '@/components/create/Step4Photos';
-import Step5Music from '@/components/create/Step5Music';
-import Step6Signature from '@/components/create/Step6Signature';
-import Step7Preview from '@/components/create/Step7Preview';
 import Loading from '@/components/ui/Loading';
+
+// ✅ Lazy load step components để giảm bundle size ban đầu
+const Step1Envelope = lazy(() => import('@/components/create/Step1Envelope'));
+const Step2Stamp = lazy(() => import('@/components/create/Step2Stamp'));
+const Step3Message = lazy(() => import('@/components/create/Step3Message'));
+const Step4Photos = lazy(() => import('@/components/create/Step4Photos'));
+const Step5Music = lazy(() => import('@/components/create/Step5Music'));
+const Step6Signature = lazy(() => import('@/components/create/Step6Signature'));
+const Step7Preview = lazy(() => import('@/components/create/Step7Preview'));
 
 // Hooks
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateCard } from '@/hooks/useCreateCard';
+import { supabase } from '@/lib/supabase';
 
 // Animation
 const pageVariants = {
@@ -46,7 +49,11 @@ export default function CreatePageWrapper() {
 function CreatePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
+  
+  // Get draftId and templateId once at the top level
+  const draftId = searchParams.get('draftId') ?? '';
+  const templateId = searchParams.get('templateId');
 
   const {
     state,
@@ -58,114 +65,242 @@ function CreatePage() {
     selectEnvelope,
     selectStamp,
     updateMessage,
+    updateLetterPages,
+    setOpenMode,
     addPhoto,
     removePhoto,
+    selectFrame,
+    updatePhotoSlot,
+    updatePhotoSlotTransform,
+    removePhotoSlot,
     selectMusic,
     setSignature,
     nextStep,
     prevStep,
+    goToStep,
     canProceed,
     totalTymCost,
   } = useCreateCard();
 
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(false); // Start with false to show UI immediately
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false); // ✅ Track when draft is fully loaded
 
   // ⛔ CHỐT HẠ: không cho init chạy lặp
   const initOnceRef = useRef(false);
+  const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitializedRef = useRef(false);
+  const initPromiseRef = useRef<Promise<void> | null>(null);
+  
+  // ✅ Prefetch data cho step components (chạy song song, không block UI)
+  useEffect(() => {
+    if (!user || authLoading) return;
+    
+    // Prefetch envelopes, stamps, music ngay khi user đã login
+    // Không cần await, chạy background để step components load nhanh hơn
+    Promise.all([
+      supabase.from('envelopes').select('*').order('points_required'),
+      supabase.from('stamps').select('*').order('points_required'),
+      supabase.from('music').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+    ]).catch(err => {
+      // Silent fail - các step components sẽ fetch lại nếu cần
+      console.debug('Prefetch failed (non-critical):', err);
+    });
+  }, [user, authLoading]);
 
   // ─────────────────────────────────────────────
-  // INIT: Auth + Draft / Template
+  // INIT: Auth + Draft / Template (Blocking - wait for completion)
   // ─────────────────────────────────────────────
   useEffect(() => {
-    if (authLoading) return;
-    if (initOnceRef.current) return;
+    // If already initialized and completed, don't re-run
+    if (isInitializedRef.current) {
+      return;
+    }
+    
+    // If init is already in progress, don't start another one
+    if (initPromiseRef.current) {
+      return;
+    }
 
-    const draftId = searchParams.get('draftId');
-    const templateId = searchParams.get('templateId');
+    // Wait for auth to complete
+    if (authLoading) {
+      return;
+    }
 
-    // Chưa login → redirect auth
+    // ⛔ STRICT AUTH CHECK: Always require user to be logged in
     if (!user) {
-      const redirect =
-        draftId
-          ? `/create?draftId=${encodeURIComponent(draftId)}`
-          : templateId
-          ? `/create?templateId=${encodeURIComponent(templateId)}`
-          : '/templates';
+      const redirect = draftId
+        ? `/create?draftId=${encodeURIComponent(draftId)}`
+        : templateId
+        ? `/create?templateId=${encodeURIComponent(templateId)}`
+        : '/templates';
 
       router.replace(`/auth?redirect=${encodeURIComponent(redirect)}`);
       return;
     }
 
+    // Show loading for initialization
+    if (templateId && !draftId) {
+      setIsInitializing(true);
+    } else if (draftId) {
+      setIsInitializing(true);
+    }
+
     initOnceRef.current = true;
 
     const run = async () => {
-      setIsInitializing(true);
-
       try {
-        // A) Có draftId → load draft
+        // A) Có draftId → load draft (blocking - wait for completion)
         if (draftId) {
-          const res = await fetch(`/api/card-drafts/${draftId}`);
-          const text = await res.text();
-          const json = text ? JSON.parse(text) : null;
+          try {
+            const res = await fetch(`/api/card-drafts/${draftId}`);
+            
+            const text = await res.text();
+            const json = text ? JSON.parse(text) : null;
 
-          if (!res.ok || !json?.data) {
+            if (!res.ok || !json?.data) {
+              router.replace('/templates');
+              return;
+            }
+
+            const d = json.data;
+
+            // ✅ Tối ưu: Chạy song song tất cả API calls thay vì tuần tự
+            // ⚠️ CRITICAL: Template MUST be loaded first as it's required
+            const promises = [];
+            if (d.template_id) {
+              // Load template first and wait for it
+              await setTemplateById(d.template_id);
+            }
+            // Then load other items in parallel
+            // ✅ Load envelope với customization data từ draft
+            let envelopeData: any = null;
+            if (d.envelope_id) {
+              // Load envelope từ database
+              const { data: envData } = await supabase.from('envelopes').select('*').eq('id', d.envelope_id).single();
+              if (envData) {
+                // Merge với customization data từ draft
+                envelopeData = {
+                  ...envData,
+                  color: d.envelope_color || envData.color, // ✅ Ưu tiên màu từ customization
+                  pattern: d.envelope_pattern || envData.pattern || 'solid',
+                  patternColor: d.envelope_pattern_color || envData.patternColor || '#5d4037',
+                  patternIntensity: d.envelope_pattern_intensity ?? envData.patternIntensity ?? 0.15,
+                  sealDesign: d.envelope_seal_design || envData.sealDesign || 'heart',
+                  sealColor: d.envelope_seal_color || envData.sealColor || '#c62828',
+                  linerPatternType: d.envelope_liner_pattern_type || envData.linerPatternType || null,
+                  linerColor: d.envelope_liner_color || envData.linerColor || '#ffffff',
+                };
+                // Set envelope với customization data đã merge
+                selectEnvelope(envelopeData);
+              } else {
+                // Fallback: vẫn gọi setEnvelopeById nếu không load được
+                promises.push(setEnvelopeById(d.envelope_id));
+              }
+            }
+            if (d.stamp_id) promises.push(setStampById(d.stamp_id));
+            if (d.music_id) promises.push(setMusicById(d.music_id));
+            
+            // Chờ tất cả hoàn thành
+            await Promise.allSettled(promises);
+
+            // Parse content to extract letterPages if it contains page breaks
+            const parsedPages = splitLetterPages(d.content || '');
+            
+            updateMessage({
+              recipientName: d.recipient_name || '',
+              senderName: d.sender_name || '',
+              message: d.content || '',
+              letterPages: parsedPages, // Explicitly set letterPages to preserve multi-page structure
+              fontStyle: d.font_style || 'font-dancing',
+              textEffect: d.text_effect || 'none',
+              photos: Array.isArray(d.photos) ? d.photos : [],
+              signatureData: d.signature_data || null,
+              // ✅ Step 4: Load frame and photoSlots from draft
+              frameId: d.frame_id || null,
+              photoSlots: Array.isArray(d.photo_slots) ? d.photo_slots : [],
+              // ✅ Step 3: Load letter background/pattern from draft
+              letterBackground: d.letter_background || '#ffffff',
+              letterPattern: d.letter_pattern || 'solid',
+              // ✅ Step 2: Load background colors từ draft
+              coverBackground: d.cover_background || '#fdf2f8',
+              coverPattern: d.cover_pattern || 'solid',
+              photoBackground: d.photo_background || '#fff8e1',
+              photoPattern: d.photo_pattern || 'solid',
+              signatureBackground: d.signature_background || '#fce4ec',
+              signaturePattern: d.signature_pattern || 'solid',
+            });
+            
+            // ✅ Mark draft as fully loaded - enable autosave
+            setIsDraftLoaded(true);
+          } catch (fetchError: any) {
+            console.error('Init fetch error:', fetchError);
             router.replace('/templates');
-            return;
           }
-
-          const d = json.data;
-
-          if (d.template_id) await setTemplateById(d.template_id);
-          if (d.envelope_id) await setEnvelopeById(d.envelope_id);
-          if (d.stamp_id) await setStampById(d.stamp_id);
-          if (d.music_id) await setMusicById(d.music_id);
-
-          updateMessage({
-            recipientName: d.recipient_name || '',
-            senderName: d.sender_name || '',
-            message: d.content || '',
-            fontStyle: d.font_style || 'font-dancing',
-            textEffect: d.text_effect || 'none',
-            photos: Array.isArray(d.photos) ? d.photos : [],
-            signatureData: d.signature_data || null,
-          });
 
           return;
         }
 
         // B) Có templateId → tạo draft
         if (templateId) {
-          const res = await fetch('/api/card-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ templateId }),
-          });
+          // No abort controller - let it complete even if tab switches
+          
+          try {
+            // ⚠️ CRITICAL: Set template into state FIRST before creating draft
+            await setTemplateById(templateId);
+            
+            const res = await fetch('/api/card-drafts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ templateId }),
+            });
 
-          const text = await res.text();
-          const json = text ? JSON.parse(text) : null;
+            const text = await res.text();
+            const json = text ? JSON.parse(text) : null;
 
-          if (!res.ok || !json?.data?.id) {
-            router.replace(`/create?templateId=${templateId}`);
-            return;
+            if (!res.ok || !json?.data?.id) {
+              if (document.visibilityState === 'visible') {
+                router.replace(`/create?templateId=${templateId}`);
+              }
+              return;
+            }
+
+            // ✅ Mark as loaded before redirecting (for smooth transition)
+            setIsDraftLoaded(true);
+            
+            // Redirect to draft page
+            if (document.visibilityState === 'visible') {
+              router.replace(`/create?draftId=${json.data.id}`);
+            }
+          } catch (fetchError: any) {
+            console.error('Create draft error:', fetchError);
+            // Don't redirect on error
           }
-
-          router.replace(`/create?draftId=${json.data.id}`);
           return;
         }
 
         // C) Không có gì → về templates
-        router.replace('/templates');
+        if (document.visibilityState === 'visible') {
+          router.replace('/templates');
+        }
       } catch (e) {
         console.error('Init create failed:', e);
-        router.replace('/templates');
+        // Don't redirect on error - let user continue
       } finally {
         setIsInitializing(false);
+        isInitializedRef.current = true;
+        initPromiseRef.current = null;
       }
     };
 
-    run();
+    // Store promise so we can check if init is in progress
+    initPromiseRef.current = run();
+    
+    // Cleanup on unmount
+    return () => {
+      // Don't abort - let it complete in background
+    };
   }, [
     authLoading,
     user,
@@ -179,8 +314,6 @@ function CreatePage() {
   ]);
 
   // AUTO-SAVE DRAFT (debounce) - stable deps (fix "deps changed size")
-const draftId = searchParams.get('draftId') ?? '';
-
 // Gom mọi thứ cần autosave vào 1 key ổn định (deps luôn cố định 2 phần tử)
 const autosaveKey = useMemo(() => {
   // IMPORTANT: luôn trả về string (kể cả khi photos undefined)
@@ -192,9 +325,34 @@ const autosaveKey = useMemo(() => {
     recipient_name: state.recipientName ?? '',
     sender_name: state.senderName ?? '',
     content: state.message ?? '',
+    rich_content: state.richContent ?? null, // ✅ Lưu rich_content (HTML từ TipTap)
     font_style: state.fontStyle ?? 'serif',
     text_effect: state.textEffect ?? null,
     photos: Array.isArray(state.photos) ? state.photos : [], // luôn là array
+    // ✅ Step 4: Photo Frame data
+    frame_id: state.frameId ?? null,
+    photo_slots: Array.isArray(state.photoSlots) ? state.photoSlots : [], // Lưu photoSlots với transform
+    // ✅ Step 6: Signature data
+    signature_data: state.signatureData ?? null,
+    // ✅ Step 3: Letter background/pattern cho trang xem thiệp
+    letter_background: state.letterBackground ?? '#ffffff',
+    letter_pattern: state.letterPattern ?? 'solid',
+    // ✅ Step 2: Background colors cho các phần khác
+    cover_background: state.coverBackground ?? '#fdf2f8',
+    cover_pattern: state.coverPattern ?? 'solid',
+    photo_background: state.photoBackground ?? '#fff8e1',
+    photo_pattern: state.photoPattern ?? 'solid',
+    signature_background: state.signatureBackground ?? '#fce4ec',
+    signature_pattern: state.signaturePattern ?? 'solid',
+    // ✅ Envelope customization data
+    envelope_color: state.envelope?.color ?? state.envelope?.envelopeBaseColor ?? null, // ✅ Lưu màu từ customization
+    envelope_pattern: state.envelope?.pattern ?? 'solid',
+    envelope_pattern_color: state.envelope?.patternColor ?? '#5d4037',
+    envelope_pattern_intensity: state.envelope?.patternIntensity ?? 0.15,
+    envelope_seal_design: state.envelope?.sealDesign ?? 'heart',
+    envelope_seal_color: state.envelope?.sealColor ?? '#c62828',
+    envelope_liner_pattern_type: state.envelope?.linerPatternType ?? null,
+    envelope_liner_color: state.envelope?.linerColor ?? '#ffffff',
   };
 
   return JSON.stringify(payload);
@@ -206,13 +364,34 @@ const autosaveKey = useMemo(() => {
   state.recipientName,
   state.senderName,
   state.message,
+  state.richContent,
   state.fontStyle,
   state.textEffect,
   state.photos,
+  state.frameId, // ✅ Step 4: Frame ID
+  state.photoSlots, // ✅ Step 4: Photo Slots với transform
+  state.signatureData, // ✅ Step 6: Signature data
+  state.letterBackground, // ✅ Step 3: Letter background
+  state.letterPattern, // ✅ Step 3: Letter pattern
+  state.coverBackground, // ✅ Step 2: Cover background
+  state.coverPattern,
+  state.photoBackground, // ✅ Step 2: Photo background
+  state.photoPattern,
+  state.signatureBackground, // ✅ Step 2: Signature background
+  state.signaturePattern,
+  state.envelope?.pattern,
+  state.envelope?.patternColor,
+  state.envelope?.patternIntensity,
+  state.envelope?.sealDesign,
+  state.envelope?.sealColor,
+  state.envelope?.linerPatternType,
+  state.envelope?.linerColor,
 ]);
 
 useEffect(() => {
-  if (!draftId) return;
+  // ⚠️ CRITICAL: Don't autosave until draft is fully loaded
+  // This prevents overwriting template_id with null during initialization
+  if (!draftId || !isDraftLoaded) return;
 
   const controller = new AbortController();
 
@@ -225,14 +404,64 @@ useEffect(() => {
         signal: controller.signal,
       });
 
-      const text = await res.text();
-      const json = text ? JSON.parse(text) : null;
-
       if (!res.ok) {
-        console.error('autosave failed', { status: res.status, body: json ?? text });
+        let errorText = '';
+        let errorBody: any = null;
+        
+        try {
+          errorText = await res.text();
+          if (errorText && errorText.trim()) {
+            try {
+              errorBody = JSON.parse(errorText);
+            } catch {
+              errorBody = errorText;
+            }
+          } else {
+            errorBody = null;
+          }
+        } catch (readErr: any) {
+          errorText = `Failed to read response: ${readErr?.message || 'Unknown error'}`;
+          errorBody = errorText;
+        }
+
+        // Log với thông tin đầy đủ - đảm bảo luôn có ít nhất một số thuộc tính
+        const errorInfo: Record<string, any> = {
+          message: 'Autosave request failed',
+          status: typeof res?.status === 'number' ? res.status : 'unknown',
+          statusText: res?.statusText || 'Unknown status',
+          url: res?.url || `/api/card-drafts/${draftId}`,
+          ok: res?.ok ?? false,
+          type: res?.type || 'unknown',
+          draftId: draftId || 'missing',
+        };
+
+        // Thêm thông tin về response body
+        if (errorBody !== null && errorBody !== undefined) {
+          errorInfo.body = errorBody;
+        } else {
+          errorInfo.body = 'Empty response body';
+        }
+
+        if (errorText) {
+          errorInfo.rawText = errorText;
+          errorInfo.textLength = errorText.length;
+        } else {
+          errorInfo.rawText = '';
+          errorInfo.textLength = 0;
+        }
+
+        // Log với format rõ ràng
+        console.error('autosave failed', JSON.stringify(errorInfo, null, 2));
       }
     } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('autosave exception', err);
+      // Only log non-abort errors
+      if (err?.name !== 'AbortError') {
+        console.error('autosave exception', {
+          name: err?.name,
+          message: err?.message,
+          stack: err?.stack
+        });
+      }
     }
   }, 600);
 
@@ -240,7 +469,8 @@ useEffect(() => {
     controller.abort();
     window.clearTimeout(t);
   };
-}, [draftId, autosaveKey]); // ✅ deps luôn cố định 2 phần tử
+}, [draftId, autosaveKey, isDraftLoaded]); // ✅ deps luôn cố định 3 phần tử
+
 
 
 
@@ -250,12 +480,13 @@ useEffect(() => {
   const handleSendCard = async (): Promise<string> => {
     if (!user) throw new Error('Chưa đăng nhập');
 
-    const draftId = searchParams.get('draftId');
     if (!draftId) throw new Error('Thiếu draftId');
 
     setIsSubmitting(true);
 
     try {
+      console.log('Sending card with draftId:', draftId);
+      
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -263,22 +494,69 @@ useEffect(() => {
       });
 
       const text = await res.text();
-      const json = text ? JSON.parse(text) : null;
-
-      if (!res.ok || !json?.data?.id) {
-        throw new Error(json?.error || 'Create card failed');
+      let json: any = null;
+      
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        console.error('Failed to parse response:', parseErr);
+        throw new Error(`Server response error: ${text}`);
       }
 
+      console.log('API response:', { status: res.status, json });
+
+      if (!res.ok) {
+        const errorMsg = json?.error || `HTTP ${res.status}: ${res.statusText}`;
+        console.error('API error:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      if (!json?.data?.id) {
+        console.error('Missing card ID in response:', json);
+        throw new Error('Server không trả về ID thiệp');
+      }
+
+      console.log('Card created successfully with ID:', json.data.id);
       return json.data.id as string;
+    } catch (error: any) {
+      console.error('Error in handleSendCard:', error);
+      throw error; // Re-throw to let Step7Preview handle it
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // ─────────────────────────────────────────────
+  // AUTH REDIRECT: Handle redirect in useEffect to avoid setState during render
+  // ─────────────────────────────────────────────
+  // ⚠️ CRITICAL: This useEffect must be called BEFORE any conditional returns
+  useEffect(() => {
+    // Only redirect if auth is not loading and user is not present
+    if (!user && !authLoading) {
+      const redirect = draftId
+        ? `/create?draftId=${encodeURIComponent(draftId)}`
+        : templateId
+        ? `/create?templateId=${encodeURIComponent(templateId)}`
+        : '/templates';
+      router.replace(`/auth?redirect=${encodeURIComponent(redirect)}`);
+    }
+  }, [user, authLoading, draftId, templateId, router]);
+
+  // ─────────────────────────────────────────────
   // LOADING STATES
   // ─────────────────────────────────────────────
-  if (authLoading || isInitializing || isSubmitting) {
+  // Only show loading for:
+  // 1. Submitting (sending card)
+  // 2. Initializing with templateId (needs to create draft first)
+  // 3. Auth loading ONLY on first load (not when returning to tab)
+  // If we already have user or isInitializedRef is true, don't show loading for auth
+  const isFirstLoad = !isInitializedRef.current && !user;
+  const shouldShowLoading = 
+    isSubmitting || 
+    (isInitializing && templateId && !draftId) ||
+    (authLoading && isFirstLoad); // Only show loading for first auth check
+  
+  if (shouldShowLoading) {
     return (
       <Loading
         text={
@@ -290,92 +568,164 @@ useEffect(() => {
     );
   }
 
-  if (!user) return null;
+  // ⛔ STRICT AUTH CHECK: Always require user to be logged in
+  // If auth is loading or user is not present, show nothing (wait for auth or redirect)
+  if (!user) {
+    return null;
+  }
 
   // ─────────────────────────────────────────────
-  // UI (GIỮ NGUYÊN)
+  // UI - Redesigned for 7-step flow
   // ─────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 overflow-x-hidden pb-32">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-rose-100">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button
-            onClick={() =>
-              currentStep > 1 ? setShowExitModal(true) : router.push('/templates')
-            }
-            className="flex items-center gap-2 text-gray-600 hover:text-rose-500"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            <span className="hidden sm:inline">Thoát</span>
-          </button>
-
-          <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 text-rose-500 fill-current" />
-            <span className="font-bold">
-              {state.template?.name || 'Tạo Thiệp'}
-            </span>
+    <main className="min-h-screen bg-gradient-to-br from-amber-50/40 via-white to-rose-50/30 flex flex-col overflow-hidden">
+      {/* Simplified Header with Step Indicator */}
+      <header className="sticky top-0 z-50 bg-gradient-to-b from-white via-amber-50/30 to-white border-b border-amber-200/50 shadow-lg flex-shrink-0">
+        {/* Top Bar: Logo & Navigation */}
+        <div className="max-w-full mx-auto px-6 h-16 flex items-center justify-between">
+          {/* Left: Logo & Back */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() =>
+                currentStep > 1 ? setShowExitModal(true) : router.push('/templates')
+              }
+              className="p-2.5 hover:bg-amber-100 rounded-xl transition-all border border-transparent hover:border-amber-200"
+            >
+              <ChevronLeft className="w-5 h-5 text-amber-700" />
+            </button>
+            <div className="flex items-center gap-2">
+              <Heart className="w-6 h-6 text-amber-700 fill-current" />
+              <span className="text-xl font-bold text-amber-900 tracking-tight" style={{ fontFamily: 'serif' }}>Echoshop</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 px-4 py-1.5 bg-rose-50 rounded-full">
-            <span>💜</span>
-            <span className="font-bold text-rose-600">{user.points}</span>
+          {/* Right: Points & Navigation */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-100 to-amber-50 rounded-full border border-amber-200/50 shadow-sm">
+              <span className="text-amber-700">💜</span>
+              <span className="font-bold text-amber-800 text-sm">{user?.points ?? 0}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={prevStep}
+                disabled={currentStep === 1}
+                className={`p-2.5 rounded-xl transition-all ${
+                  currentStep === 1
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : 'text-amber-700 hover:bg-amber-100 border border-transparent hover:border-amber-200'
+                }`}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={nextStep}
+                disabled={!canProceed(currentStep) || currentStep === 7}
+                className={`flex items-center gap-2 px-8 py-2.5 rounded-xl transition-all font-semibold text-sm ${
+                  canProceed(currentStep) && currentStep < 7
+                    ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-sm'
+                }`}
+              >
+                <span>{currentStep === 7 ? 'Hoàn thành' : 'Tiếp theo'}</span>
+                {currentStep < 7 && <ChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Step Indicator Bar */}
+        <div className="border-t border-amber-200/50 bg-gradient-to-b from-amber-50/50 to-white">
+          <StepIndicator 
+            currentStep={currentStep} 
+            totalSteps={7} 
+            onStepClick={goToStep}
+          />
         </div>
       </header>
 
-      <div className="pt-6 pb-2">
-        <StepIndicator currentStep={currentStep} />
-      </div>
-
-      <div className="relative w-full max-w-7xl mx-auto px-4 mt-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            variants={pageVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={pageTransition}
-          >
+      {/* Main Content Area - Professional Layout */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Central Canvas */}
+        <div className="flex-1 overflow-y-auto bg-gradient-to-br from-amber-50/20 via-white to-rose-50/20 w-full">
+          <div className="max-w-7xl mx-auto px-4 py-2">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentStep}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={pageTransition}
+              >
             {currentStep === 1 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step1Envelope
                 selectedEnvelope={state.envelope}
                 onSelectEnvelope={selectEnvelope}
               />
+              </Suspense>
             )}
             {currentStep === 2 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step2Stamp
                 envelope={state.envelope}
                 liner={null}
                 selectedStamp={state.stamp}
                 onSelectStamp={selectStamp}
+                coverBackground={state.coverBackground}
+                coverPattern={state.coverPattern}
+                photoBackground={state.photoBackground}
+                photoPattern={state.photoPattern}
+                signatureBackground={state.signatureBackground}
+                signaturePattern={state.signaturePattern}
+                onUpdateBackgrounds={(data) => {
+                  updateMessage(data);
+                }}
               />
+              </Suspense>
             )}
             {currentStep === 3 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step3Message
                 recipientName={state.recipientName}
                 senderName={state.senderName}
                 message={state.message}
+                letterPages={state.letterPages}
                 fontStyle={state.fontStyle}
                 textEffect={state.textEffect}
+                  letterBackground={state.letterBackground}
+                  letterPattern={state.letterPattern}
+                  stickers={state.stickers}
+                  signatureData={state.signatureData}
+                  userTym={user?.points || 0}
                 onUpdate={updateMessage}
+                onUpdateLetterPages={updateLetterPages}
               />
+              </Suspense>
             )}
             {currentStep === 4 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step4Photos
-                photos={state.photos}
-                onAddPhoto={addPhoto}
-                onRemovePhoto={removePhoto}
+                frameId={state.frameId}
+                photoSlots={state.photoSlots}
+                onSelectFrame={selectFrame}
+                onUpdatePhotoSlot={updatePhotoSlot}
+                onUpdatePhotoSlotTransform={updatePhotoSlotTransform}
+                onRemovePhotoSlot={removePhotoSlot}
+                userTym={user?.points || 0}
               />
+              </Suspense>
             )}
             {currentStep === 5 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step5Music
                 selectedMusicId={state.musicId}
                 onSelectMusic={selectMusic}
               />
+              </Suspense>
             )}
             {currentStep === 6 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step6Signature
                 signatureData={state.signatureData}
                 onSetSignature={(data) => {
@@ -386,50 +736,23 @@ useEffect(() => {
                   setSignature(data);
                 }}
               />
-
+              </Suspense>
             )}
             {currentStep === 7 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step7Preview
                 state={state}
-                userTym={user.points}
+                userTym={user?.points ?? 0}
                 onSend={handleSendCard}
               />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {currentStep < 7 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/90 border-t p-4 z-50">
-          <div className="max-w-4xl mx-auto flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span>💜</span>
-              <span className="font-bold text-rose-600">
-                {totalTymCost} Tym
-              </span>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={prevStep}
-                className="px-6 py-3 bg-gray-100 rounded-xl"
-              >
-                Quay lại
-              </button>
-              <button
-                onClick={nextStep}
-                disabled={!canProceed(currentStep)}
-                className={`px-8 py-3 rounded-xl ${
-                  canProceed(currentStep)
-                    ? 'bg-rose-500 text-white'
-                    : 'bg-gray-200 text-gray-400'
-                }`}
-              >
-                Tiếp tục
-              </button>
-            </div>
+              </Suspense>
+              )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
-      )}
+      </div>
+
 
       <AnimatePresence>
         {showExitModal && (

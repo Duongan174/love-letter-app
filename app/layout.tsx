@@ -12,9 +12,11 @@ import {
   Dancing_Script,
   Lexend,
   Cormorant_Garamond,
-  EB_Garamond,
   Crimson_Pro,
 } from 'next/font/google';
+
+// Tạm thời comment EB_Garamond do lỗi với Turbopack trong Next.js 16
+// import { EB_Garamond } from 'next/font/google';
 
 // Font nền tảng cho tiếng Việt (ưu tiên dùng cho nội dung tiếng Việt)
 const beVietnamPro = Be_Vietnam_Pro({
@@ -42,13 +44,16 @@ const cormorant = Cormorant_Garamond({
   variable: '--font-heading',
 });
 
-const ebGaramond = EB_Garamond({
-  subsets: ['vietnamese', 'latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  style: ['normal', 'italic'],
-  display: 'swap',
-  variable: '--font-elegant',
-});
+// Tạm thời sử dụng Cormorant_Garamond thay cho EB_Garamond do lỗi Turbopack
+// Sẽ uncomment khi Next.js fix lỗi này
+// const ebGaramond = EB_Garamond({
+//   subsets: ['vietnamese', 'latin'],
+//   weight: ['400', '500', '600', '700', '800'],
+//   style: ['normal', 'italic'],
+//   display: 'swap',
+//   variable: '--font-elegant',
+// });
+const ebGaramond = cormorant; // Fallback tạm thời
 
 const crimsonPro = Crimson_Pro({
   subsets: ['vietnamese', 'latin'],

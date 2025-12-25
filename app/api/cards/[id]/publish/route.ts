@@ -9,9 +9,10 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function POST(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
+  const { id } = await params;
 
   // 1️⃣ Auth
   const {
@@ -29,7 +30,7 @@ export async function POST(
   const { data: card } = await supabase
     .from('cards')
     .select('status, total_tym')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', user.id)
     .single();
 
@@ -44,7 +45,7 @@ export async function POST(
   await supabase
     .from('cards')
     .update({ status: 'published' })
-    .eq('id', params.id);
+    .eq('id', id);
 
   return NextResponse.json({ success: true });
 }

@@ -12,6 +12,10 @@ interface PromoCodeButtonProps {
 export default function PromoCodeButton({ userId, onBalanceUpdate }: PromoCodeButtonProps) {
   const [showModal, setShowModal] = useState(false);
 
+  if (!userId || userId.trim() === '') {
+    return null;
+  }
+
   return (
     <>
       <button

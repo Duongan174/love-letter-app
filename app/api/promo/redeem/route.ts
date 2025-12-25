@@ -1,79 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { code, user_id } = await request.json();
+    const supabase = await createClient();
+    const body = await request.json();
+    const { code, user_id } = body;
 
-    if (!code || !user_id) {
-      return NextResponse.json({ error: 'Thiếu mã hoặc user_id' }, { status: 400 });
+    console.log('Redeem request:', { code, user_id: user_id ? 'present' : 'missing' });
+
+    if (!code || !code.trim()) {
+      return NextResponse.json({ error: 'Vui lòng nhập mã khuyến mãi' }, { status: 400 });
     }
 
-    const { data: promo, error: promoError } = await supabase
-      .from('promo_codes')
-      .select('*')
-      .eq('code', code.toUpperCase().trim())
-      .single();
-
-    if (promoError || !promo) {
-      return NextResponse.json({ error: 'Mã không tồn tại' }, { status: 404 });
+    if (!user_id || user_id.trim() === '') {
+      return NextResponse.json({ error: 'Vui lòng đăng nhập để sử dụng mã khuyến mãi' }, { status: 401 });
     }
 
-    if (!promo.is_active) {
-      return NextResponse.json({ error: 'Mã đã ngừng hoạt động' }, { status: 400 });
+    // Xác thực user từ session
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !authUser) {
+      return NextResponse.json({ error: 'Vui lòng đăng nhập để sử dụng mã khuyến mãi' }, { status: 401 });
     }
 
-    if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
-      return NextResponse.json({ error: 'Mã đã hết hạn' }, { status: 400 });
+    // Đảm bảo user_id từ request khớp với user đã đăng nhập
+    if (authUser.id !== user_id) {
+      return NextResponse.json({ error: 'User ID không khớp' }, { status: 403 });
     }
 
-    if (promo.current_uses >= promo.max_uses) {
-      return NextResponse.json({ error: 'Mã đã hết lượt sử dụng' }, { status: 400 });
-    }
-
-    const { data: existingUse } = await supabase
-      .from('promo_code_uses')
-      .select('id')
-      .eq('promo_code_id', promo.id)
-      .eq('user_id', user_id)
-      .single();
-
-    if (existingUse) {
-      return NextResponse.json({ error: 'Bạn đã sử dụng mã này rồi' }, { status: 400 });
-    }
-
-    const { data: user, error: userError } = await supabase
+    // Kiểm tra và tạo user nếu chưa có trong bảng users
+    const { data: existingUser } = await supabase
       .from('users')
-      .select('points')
+      .select('id, points')
       .eq('id', user_id)
       .single();
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Không tìm thấy user' }, { status: 404 });
+    if (!existingUser) {
+      // Tạo user mới trong bảng users từ thông tin auth
+      const { error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'User',
+          avatar: authUser.user_metadata?.avatar_url || null,
+          provider: authUser.app_metadata?.provider || null,
+          points: 0,
+          role: 'user',
+        });
+
+      if (createError) {
+        console.error('Create user error:', createError);
+        return NextResponse.json({ error: 'Không thể tạo user. Vui lòng thử lại.' }, { status: 500 });
+    }
     }
 
-    const newPoints = (user.points || 0) + promo.points;
-    
-    await supabase
-      .from('users')
-      .update({ points: newPoints })
-      .eq('id', user_id);
+    // Sử dụng function Supabase để redeem an toàn hơn
+    const { data: result, error: functionError } = await supabase.rpc('redeem_promo_code', {
+      p_code: code.trim(),
+      p_user_id: user_id,
+    });
 
-    await supabase.from('promo_code_uses').insert([{
-      promo_code_id: promo.id,
-      user_id: user_id,
-    }]);
+    if (functionError) {
+      console.error('Function error:', functionError);
+      return NextResponse.json({ error: 'Lỗi xử lý mã khuyến mãi' }, { status: 500 });
+    }
 
-    await supabase
-      .from('promo_codes')
-      .update({ current_uses: promo.current_uses + 1 })
-      .eq('id', promo.id);
+    if (!result || !result.success) {
+      const errorMessage = result?.error || 'Không thể đổi mã khuyến mãi';
+      // Xử lý trường hợp USER_NOT_FOUND (không nên xảy ra vì đã tạo ở trên)
+      if (errorMessage === 'USER_NOT_FOUND') {
+        return NextResponse.json({ error: 'Không tìm thấy user. Vui lòng đăng nhập lại.' }, { status: 404 });
+      }
+      const statusCode = errorMessage.includes('Không tìm thấy') ? 404 : 400;
+      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Nhận thành công ${promo.points} Tym!`,
-      tym_received: promo.points,
-      new_balance: newPoints,
+      message: result.message || `Nhận thành công ${result.tym_received} Tym!`,
+      tym_received: result.tym_received,
+      new_balance: result.new_balance,
     });
 
   } catch (error) {

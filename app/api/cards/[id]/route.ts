@@ -9,9 +9,10 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
+  const { id } = await params;
 
   // 1️⃣ Auth
   const {
@@ -29,7 +30,7 @@ export async function PUT(
   const { data: card } = await supabase
     .from('cards')
     .select('status')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('user_id', user.id)
     .single();
 
@@ -54,7 +55,7 @@ export async function PUT(
       stamp_id: body.stamp_id,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', params.id);
+    .eq('id', id);
 
   if (error) {
     return NextResponse.json(

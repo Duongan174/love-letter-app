@@ -33,6 +33,19 @@ export type Database = {
           text_align: string | null
           updated_at: string | null
           user_id: string
+          // ✅ Step 4: Photo Frame support
+          frame_id: string | null
+          photo_slots: Json | null
+          // ✅ Envelope customization
+          envelope_pattern: string | null
+          envelope_pattern_color: string | null
+          envelope_pattern_intensity: number | null
+          envelope_seal_design: string | null
+          envelope_seal_color: string | null
+          envelope_liner_pattern_type: string | null
+          envelope_liner_color: string | null
+          // ✅ Rich content support
+          rich_content: string | null
         }
         Insert: {
           content?: string | null
@@ -52,6 +65,19 @@ export type Database = {
           text_align?: string | null
           updated_at?: string | null
           user_id: string
+          // ✅ Step 4: Photo Frame support
+          frame_id?: string | null
+          photo_slots?: Json | null
+          // ✅ Envelope customization
+          envelope_pattern?: string | null
+          envelope_pattern_color?: string | null
+          envelope_pattern_intensity?: number | null
+          envelope_seal_design?: string | null
+          envelope_seal_color?: string | null
+          envelope_liner_pattern_type?: string | null
+          envelope_liner_color?: string | null
+          // ✅ Rich content support
+          rich_content?: string | null
         }
         Update: {
           content?: string | null
@@ -71,6 +97,19 @@ export type Database = {
           text_align?: string | null
           updated_at?: string | null
           user_id?: string
+          // ✅ Step 4: Photo Frame support
+          frame_id?: string | null
+          photo_slots?: Json | null
+          // ✅ Envelope customization
+          envelope_pattern?: string | null
+          envelope_pattern_color?: string | null
+          envelope_pattern_intensity?: number | null
+          envelope_seal_design?: string | null
+          envelope_seal_color?: string | null
+          envelope_liner_pattern_type?: string | null
+          envelope_liner_color?: string | null
+          // ✅ Rich content support
+          rich_content?: string | null
         }
         Relationships: [
           {
@@ -99,6 +138,13 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "card_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_drafts_frame_id_fkey"
+            columns: ["frame_id"]
+            isOneToOne: false
+            referencedRelation: "photo_frames"
             referencedColumns: ["id"]
           },
         ]
@@ -177,6 +223,19 @@ export type Database = {
           user_id: string | null
           view_count: number | null
           wax_color: string | null
+          // ✅ Step 4: Photo Frame support
+          frame_id: string | null
+          photo_slots: Json | null
+          // ✅ Envelope customization
+          envelope_pattern: string | null
+          envelope_pattern_color: string | null
+          envelope_pattern_intensity: number | null
+          envelope_seal_design: string | null
+          envelope_seal_color: string | null
+          envelope_liner_pattern_type: string | null
+          envelope_liner_color: string | null
+          // ✅ Rich content support
+          rich_content: string | null
         }
         Insert: {
           content: string
@@ -201,6 +260,19 @@ export type Database = {
           user_id?: string | null
           view_count?: number | null
           wax_color?: string | null
+          // ✅ Step 4: Photo Frame support
+          frame_id?: string | null
+          photo_slots?: Json | null
+          // ✅ Envelope customization
+          envelope_pattern?: string | null
+          envelope_pattern_color?: string | null
+          envelope_pattern_intensity?: number | null
+          envelope_seal_design?: string | null
+          envelope_seal_color?: string | null
+          envelope_liner_pattern_type?: string | null
+          envelope_liner_color?: string | null
+          // ✅ Rich content support
+          rich_content?: string | null
         }
         Update: {
           content?: string
@@ -225,6 +297,19 @@ export type Database = {
           user_id?: string | null
           view_count?: number | null
           wax_color?: string | null
+          // ✅ Step 4: Photo Frame support
+          frame_id?: string | null
+          photo_slots?: Json | null
+          // ✅ Envelope customization
+          envelope_pattern?: string | null
+          envelope_pattern_color?: string | null
+          envelope_pattern_intensity?: number | null
+          envelope_seal_design?: string | null
+          envelope_seal_color?: string | null
+          envelope_liner_pattern_type?: string | null
+          envelope_liner_color?: string | null
+          // ✅ Rich content support
+          rich_content?: string | null
         }
         Relationships: [
           {
@@ -260,6 +345,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_frame_id_fkey"
+            columns: ["frame_id"]
+            isOneToOne: false
+            referencedRelation: "photo_frames"
             referencedColumns: ["id"]
           },
         ]

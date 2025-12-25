@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -92,18 +92,42 @@ export async function POST(request: Request) {
       music_id: draft.music_id || null,
 
       content: draft.content,
+      rich_content: draft.rich_content || null, // ✅ Lưu rich_content vào cards
       font_style: draft.font_style || 'font-dancing',
       text_effect: draft.text_effect || 'typewriter',
       photos: Array.isArray(draft.photos) ? draft.photos : [],
       signature_data: draft.signature_data || null,
       sender_name: draft.sender_name || null,
 
+      // ✅ Step 4: Photo Frame data - lưu vào cards
+      frame_id: draft.frame_id || null,
+      photo_slots: Array.isArray(draft.photo_slots) ? draft.photo_slots : null,
+
+      // ✅ Step 3: Letter background/pattern cho trang xem thiệp
+      letter_background: draft.letter_background || '#ffffff',
+      letter_pattern: draft.letter_pattern || 'solid',
+      // ✅ Step 2: Background colors cho các phần khác
+      cover_background: draft.cover_background || '#fdf2f8',
+      cover_pattern: draft.cover_pattern || 'solid',
+      photo_background: draft.photo_background || '#fff8e1',
+      photo_pattern: draft.photo_pattern || 'solid',
+      signature_background: draft.signature_background || '#fce4ec',
+      signature_pattern: draft.signature_pattern || 'solid',
+
       // giúp public share link dễ (tuỳ RLS của bạn)
       status: 'sent',
       sent_at: new Date().toISOString(),
 
-      // optional: đồng bộ màu phong bì vào cards nếu bạn muốn dùng cards.envelope_color
-      envelope_color: envRes.data?.color ?? undefined,
+      // ✅ Ưu tiên màu từ customization, nếu không có thì lấy từ database
+      envelope_color: draft.envelope_color ?? envRes.data?.color ?? undefined,
+      // ✅ Envelope customization data
+      envelope_pattern: draft.envelope_pattern ?? 'solid',
+      envelope_pattern_color: draft.envelope_pattern_color ?? '#5d4037',
+      envelope_pattern_intensity: draft.envelope_pattern_intensity ?? 0.15,
+      envelope_seal_design: draft.envelope_seal_design ?? 'heart',
+      envelope_seal_color: draft.envelope_seal_color ?? '#c62828',
+      envelope_liner_pattern_type: draft.envelope_liner_pattern_type ?? null,
+      envelope_liner_color: draft.envelope_liner_color ?? '#ffffff',
     })
     .select('id')
     .single();

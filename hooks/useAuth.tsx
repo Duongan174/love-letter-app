@@ -1,3 +1,4 @@
+// hooks/useAuth.tsx
 'use client';
 
 import React, {
@@ -20,7 +21,7 @@ export type AppUser = {
   name: string | null;
   avatar: string | null;
   provider: string | null;
-  points: number; // ✅ DB đang là points
+  points: number;
   role: Role;
 };
 
@@ -35,22 +36,31 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-function safeSbError(err: unknown) {
-  if (!err || typeof err !== 'object') return { message: String(err) };
-  const e = err as any;
-  return {
-    message: e.message,
-    code: e.code,
-    details: e.details,
-    hint: e.hint,
-    status: e.status,
-  };
+function normalizeUnknownError(err: unknown) {
+  // ✅ Log ra được message/stack thay vì {}
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message, stack: err.stack };
+  }
+  if (typeof err === 'string') return { message: err };
+  if (err && typeof err === 'object') {
+    const e = err as any;
+    const keys = Object.keys(e);
+    return {
+      keys,
+      message: e.message,
+      code: e.code,
+      details: e.details,
+      hint: e.hint,
+      status: e.status,
+      raw: keys.length ? e : String(err),
+    };
+  }
+  return { message: String(err) };
 }
 
 function buildFallbackUser(sbUser: SbUser): AppUser {
   const meta: any = sbUser.user_metadata ?? {};
   const appMeta: any = sbUser.app_metadata ?? {};
-
   return {
     id: sbUser.id,
     email: sbUser.email ?? null,
@@ -64,16 +74,13 @@ function buildFallbackUser(sbUser: SbUser): AppUser {
 
 function resolveEmail(sbUser: SbUser): string | null {
   const meta: any = sbUser.user_metadata ?? {};
-  // đa số OAuth có email, nhưng cứ phòng trường hợp
-  const email = sbUser.email ?? meta.email ?? null;
-  if (!email || typeof email !== 'string' || !email.trim()) return null;
-  return email.trim();
+  const email = (sbUser.email ?? meta.email ?? '').trim();
+  return email ? email : null;
 }
 
 async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
   const supabase = supabaseBrowser();
 
-  // ✅ đúng cột: points
   const { data, error } = await supabase
     .from('users')
     .select('id,email,name,avatar,provider,points,role')
@@ -81,23 +88,21 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
     .maybeSingle();
 
   if (error) {
-    console.error('fetch profile error:', safeSbError(error));
+    console.warn('fetchProfile error:', normalizeUnknownError(error));
     return buildFallbackUser(sbUser);
   }
 
-  // nếu chưa có row -> tạo row tối thiểu
   if (!data) {
+    // ✅ chưa có row user -> tạo tối thiểu
     const meta: any = sbUser.user_metadata ?? {};
     const appMeta: any = sbUser.app_metadata ?? {};
 
     const email = resolveEmail(sbUser);
-
-    // ✅ nếu DB email NOT NULL mà bạn không có email → không insert (tránh crash)
     if (!email) return buildFallbackUser(sbUser);
 
     const insertPayload = {
       id: sbUser.id,
-      email, // ✅ luôn là string
+      email,
       name: meta.full_name ?? meta.name ?? null,
       avatar: meta.avatar_url ?? null,
       provider: appMeta.provider ?? null,
@@ -109,12 +114,10 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
       .select('id,email,name,avatar,provider,points,role')
       .maybeSingle();
 
-    if (ins.error) {
-      console.error('create profile error:', safeSbError(ins.error));
+    if (ins.error || !ins.data) {
+      console.warn('createProfile error:', normalizeUnknownError(ins.error));
       return buildFallbackUser(sbUser);
     }
-
-    if (!ins.data) return buildFallbackUser(sbUser);
 
     return {
       id: ins.data.id,
@@ -138,6 +141,43 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
   };
 }
 
+/**
+ * ✅ Lấy user có timeout nhưng KHÔNG throw.
+ * Nếu timeout / network fail → trả { user: null } để app không kẹt.
+ */
+async function getUserSafe(
+  supabase: ReturnType<typeof supabaseBrowser>,
+  timeoutMs = 12000
+): Promise<{ user: SbUser | null; timedOut: boolean; error?: unknown }> {
+  let timer: number | undefined;
+
+  try {
+    const timeoutPromise = new Promise<{ kind: 'timeout' }>((resolve) => {
+      timer = window.setTimeout(() => {
+        resolve({ kind: 'timeout' as const });
+      }, timeoutMs);
+    });
+    
+    const res = await Promise.race([
+      supabase.auth.getUser().then((r) => ({ kind: 'ok' as const, r })),
+      timeoutPromise,
+    ]);
+
+    if (res.kind === 'timeout') {
+      return { user: null, timedOut: true, error: new Error('supabase.auth.getUser timeout') };
+    }
+
+    const { data, error } = res.r;
+    if (error) return { user: null, timedOut: false, error };
+
+    return { user: data.user ?? null, timedOut: false };
+  } catch (err) {
+    return { user: null, timedOut: false, error: err };
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [user, setUser] = useState<AppUser | null>(null);
@@ -152,16 +192,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    const sbUser = data.user;
+    const { user: sbUser, timedOut, error } = await getUserSafe(supabase, 12000);
 
+    if (error) {
+      // ✅ Không còn console.error {} gây khó chịu nữa
+      // Chỉ warn để debug, app vẫn chạy và không kẹt
+      console.warn('refreshProfile warn:', { timedOut, ...normalizeUnknownError(error) });
+    }
+
+    // ⚠️ CRITICAL: Nếu timeout, không set user = null (giữ nguyên user hiện tại)
+    // Chỉ set null nếu thực sự không có user (không phải timeout)
     if (!sbUser) {
-      if (aliveRef.current) setUser(null);
+      // Chỉ set null nếu không phải timeout (có thể là thực sự đã logout)
+      // Nếu timeout, giữ nguyên user hiện tại để không bị đăng xuất
+      if (!timedOut && aliveRef.current) {
+        setUser(null);
+      }
       return;
     }
 
-    const prof = await fetchProfile(sbUser);
-    if (aliveRef.current) setUser(prof);
+    try {
+      const prof = await fetchProfile(sbUser);
+      if (aliveRef.current) setUser(prof);
+    } catch (err) {
+      console.warn('fetchProfile unexpected warn:', normalizeUnknownError(err));
+      if (aliveRef.current) setUser(buildFallbackUser(sbUser));
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -174,17 +230,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
-      if (event === 'SIGNED_OUT') {
-        if (aliveRef.current) {
-          setUser(null);
-          setLoading(false);
+      try {
+        if (event === 'SIGNED_OUT') {
+          if (aliveRef.current) setUser(null);
+          return;
         }
-        return;
-      }
 
-      if (aliveRef.current) setLoading(true);
-      await refreshProfile();
-      if (aliveRef.current) setLoading(false);
+        if (aliveRef.current) setLoading(true);
+        await refreshProfile();
+      } catch (err) {
+        console.warn('onAuthStateChange warn:', normalizeUnknownError(err));
+        if (aliveRef.current) setUser(null);
+      } finally {
+        if (aliveRef.current) setLoading(false);
+      }
     });
 
     return () => sub.subscription.unsubscribe();
@@ -195,7 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) console.error('signIn google error:', safeSbError(error));
+    if (error) console.warn('signIn google warn:', normalizeUnknownError(error));
   }, [supabase]);
 
   const signInWithFacebook = useCallback(async () => {
@@ -203,12 +262,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: 'facebook',
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) console.error('signIn facebook error:', safeSbError(error));
+    if (error) console.warn('signIn facebook warn:', normalizeUnknownError(error));
   }, [supabase]);
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) console.error('signOut error:', safeSbError(error));
+    if (error) console.warn('signOut warn:', normalizeUnknownError(error));
   }, [supabase]);
 
   const value: AuthCtx = useMemo(

@@ -4,54 +4,40 @@ import { createClient } from '@/lib/supabase/server';
 import CardEditor from '@/components/card/CardEditor';
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditCardPage({ params }: PageProps) {
-  const supabase = createClient();
+  const supabase = await createClient();
+  const { id } = await params;
 
   // 1️⃣ Lấy card + join dữ liệu liên quan
   const { data: card, error } = await supabase
     .from('cards')
     .select(`
       id,
-      message,
-      signature,
-      template:card_templates (
-        id,
-        name,
-        animation_url
-      ),
-      music:music_tracks (
-        id,
-        name,
-        audio_url
-      )
+      content,
+      sender_name,
+      recipient_name,
+      font_style,
+      text_align
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .single();
 
   if (error || !card) {
     return <div className="p-10">Không tìm thấy thiệp</div>;
   }
 
-  // 2️⃣ Lấy danh sách template & music để chọn
-  const { data: templates } = await supabase
-    .from('card_templates')
-    .select('id, name, animation_url')
-    .eq('is_active', true);
+  // Transform card data to match CardEditor's draft interface
+  const draft = {
+    id: card.id,
+    content: card.content || '',
+    sender_name: card.sender_name || '',
+    recipient_name: card.recipient_name || '',
+    font_style: card.font_style || 'font-dancing',
+    text_align: card.text_align || 'left',
+  };
 
-  const { data: musics } = await supabase
-    .from('music_tracks')
-    .select('id, name, audio_url')
-    .eq('is_active', true);
-
-  return (
-    <CardEditor
-      cardId={card.id}
-      initialCard={card}
-      templates={templates || []}
-      musics={musics || []}
-    />
-  );
+  return <CardEditor draft={draft} />;
 }

@@ -10,11 +10,12 @@ import {
 interface StepIndicatorProps {
   currentStep: number;
   totalSteps?: number;
+  onStepClick?: (step: number) => void;
 }
 
 const steps = [
-  { icon: LayoutTemplate, label: 'Mẫu thiệp' },
   { icon: Mail, label: 'Phong bì' },
+  { icon: LayoutTemplate, label: 'Tem' },
   { icon: MessageSquare, label: 'Lời nhắn' },
   { icon: Image, label: 'Ảnh' },
   { icon: Music, label: 'Nhạc' },
@@ -22,9 +23,9 @@ const steps = [
   { icon: Send, label: 'Gửi' },
 ];
 
-export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndicatorProps) {
+export default function StepIndicator({ currentStep, totalSteps = 7, onStepClick }: StepIndicatorProps) {
   return (
-    <div className="w-full py-6 px-4">
+    <div className="w-full py-4 px-4">
       {/* Desktop View */}
       <div className="hidden md:flex items-center justify-center max-w-4xl mx-auto">
         {steps.map((step, index) => {
@@ -42,15 +43,17 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
                 transition={{ delay: index * 0.1 }}
                 className="flex flex-col items-center"
               >
-                <div
+                <button
+                  onClick={() => onStepClick && isCompleted && onStepClick(index + 1)}
+                  disabled={!isCompleted}
                   className={`
                     relative w-12 h-12 rounded-full flex items-center justify-center
                     transition-all duration-300 shadow-lg
                     ${isCompleted 
-                      ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white' 
+                      ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white cursor-pointer hover:scale-110 hover:shadow-xl' 
                       : isCurrent 
-                        ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white ring-4 ring-rose-200' 
-                        : 'bg-gray-100 text-gray-400'
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white ring-4 ring-amber-200 cursor-default' 
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }
                   `}
                 >
@@ -62,15 +65,15 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
                   
                   {/* Pulse animation for current step */}
                   {isCurrent && (
-                    <span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-30" />
+                    <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-30" />
                   )}
-                </div>
+                </button>
                 
                 {/* Label */}
                 <span 
                   className={`
                     mt-2 text-xs font-medium transition-colors
-                    ${isCurrent ? 'text-rose-600' : isCompleted ? 'text-green-600' : 'text-gray-400'}
+                    ${isCurrent ? 'text-amber-700' : isCompleted ? 'text-amber-700 hover:text-amber-900' : 'text-gray-400'}
                   `}
                 >
                   {step.label}
@@ -84,7 +87,7 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
                     initial={{ width: 0 }}
                     animate={{ width: isCompleted ? '100%' : '0%' }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
-                    className="h-full bg-gradient-to-r from-green-400 to-emerald-500"
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-600"
                   />
                 </div>
               )}
@@ -99,7 +102,7 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
           <span className="text-sm font-medium text-gray-600">
             Bước {currentStep} / {totalSteps}
           </span>
-          <span className="text-sm font-medium text-rose-600">
+          <span className="text-sm font-medium text-amber-700">
             {steps[currentStep - 1]?.label}
           </span>
         </div>
@@ -110,7 +113,7 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
             initial={{ width: 0 }}
             animate={{ width: `${(currentStep / totalSteps) * 100}%` }}
             transition={{ duration: 0.5 }}
-            className="h-full bg-gradient-to-r from-rose-500 to-pink-500"
+            className="h-full bg-gradient-to-r from-amber-500 to-amber-600"
           />
         </div>
 
@@ -124,12 +127,12 @@ export default function StepIndicator({ currentStep, totalSteps = 7 }: StepIndic
             return (
               <div
                 key={index}
-                className={`
+                  className={`
                   w-8 h-8 rounded-full flex items-center justify-center
                   ${isCompleted 
-                    ? 'bg-green-500 text-white' 
+                    ? 'bg-amber-600 text-white' 
                     : isCurrent 
-                      ? 'bg-rose-500 text-white' 
+                      ? 'bg-amber-500 text-white' 
                       : 'bg-gray-200 text-gray-400'
                   }
                 `}

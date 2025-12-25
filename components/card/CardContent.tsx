@@ -74,10 +74,19 @@ export default function CardContent({ card }: CardContentProps) {
       initial={{ scale: 0.8, opacity: 0, rotateY: -180 }}
       animate={{ scale: 1, opacity: 1, rotateY: 0 }}
       transition={{ duration: 0.8, type: 'spring' }}
-      className="w-full max-w-lg mx-auto"
+      className="w-full flex justify-center"
     >
       {/* Card */}
-      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <div 
+        className="bg-white rounded-3xl shadow-2xl overflow-hidden mx-auto"
+        style={{
+          width: '1080px',
+          height: '1440px',
+          maxWidth: '100%',
+          maxHeight: 'calc(100vh - 100px)',
+          aspectRatio: '1080 / 1440',
+        }}
+      >
         {/* Header decoration */}
         <div className="h-2 bg-gradient-to-r from-rose-400 via-pink-500 to-purple-500" />
         

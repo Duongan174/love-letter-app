@@ -8,9 +8,21 @@ interface CloudinaryUploadProps {
   onUpload: (url: string) => void; // Hàm trả về URL sau khi up xong
   currentUrl?: string; // URL hiện tại (nếu đang sửa)
   label?: string;
+  folder?: string; // Folder trên Cloudinary
+  accept?: string; // File types to accept
+  type?: string; // Type of upload (audio, image, etc.)
+  maxSize?: number; // Max file size in MB
 }
 
-export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh bìa" }: CloudinaryUploadProps) {
+export default function CloudinaryUpload({ 
+  onUpload, 
+  currentUrl, 
+  label = "Ảnh bìa",
+  folder = 'vintage-ecard/templates',
+  accept = 'image/*,video/*',
+  type,
+  maxSize = 10
+}: CloudinaryUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(currentUrl || '');
 
@@ -18,12 +30,19 @@ export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh 
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file size
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > maxSize) {
+      alert(`File quá lớn! Tối đa ${maxSize}MB`);
+      return;
+    }
+
     try {
       setUploading(true); // Bắt đầu quay
 
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('folder', 'vintage-ecard/templates'); // Folder trên Cloudinary
+      formData.append('folder', folder);
 
       // Gọi API
       const res = await fetch('/api/upload', {
@@ -57,8 +76,16 @@ export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh 
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
       
       {preview ? (
-        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-200 group">
+        <div className="relative w-full rounded-lg overflow-hidden border border-gray-200 group">
+          {type === 'audio' ? (
+            <div className="p-4 bg-gray-50">
+              <audio src={preview} controls className="w-full" />
+            </div>
+          ) : (
+            <div className="aspect-video">
           <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+            </div>
+          )}
           <button
             onClick={handleRemove}
             type="button"
@@ -71,7 +98,7 @@ export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh 
         <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:bg-gray-50 transition-colors text-center">
           <input
             type="file"
-            accept="image/*,video/*"
+            accept={accept}
             onChange={handleFileChange}
             disabled={uploading}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -87,8 +114,8 @@ export default function CloudinaryUpload({ onUpload, currentUrl, label = "Ảnh 
                 <div className="w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center text-rose-500">
                   <Upload className="w-5 h-5" />
                 </div>
-                <p className="text-sm font-medium text-gray-700">Nhấn để chọn ảnh/video</p>
-                <p className="text-xs text-gray-400">JPG, PNG, MP4 (Max 10MB)</p>
+                <p className="text-sm font-medium text-gray-700">Nhấn để chọn file</p>
+                <p className="text-xs text-gray-400">Max {maxSize}MB</p>
               </>
             )}
           </div>

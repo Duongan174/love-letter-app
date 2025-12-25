@@ -63,10 +63,33 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       'recipient_name',
       'sender_name',
       'content',
+      'rich_content', // ✅ Thêm rich_content
       'font_style',
       'text_effect',
       'photos',
       'signature_data',
+      // ✅ Step 4: Photo Frame data
+      'frame_id',
+      'photo_slots',
+      // ✅ Step 3: Letter background/pattern
+      'letter_background',
+      'letter_pattern',
+      // ✅ Step 2: Background colors cho các phần khác
+      'cover_background',
+      'cover_pattern',
+      'photo_background',
+      'photo_pattern',
+      'signature_background',
+      'signature_pattern',
+      // ✅ Envelope customization fields
+      'envelope_color', // ✅ Lưu màu từ customization
+      'envelope_pattern',
+      'envelope_pattern_color',
+      'envelope_pattern_intensity',
+      'envelope_seal_design',
+      'envelope_seal_color',
+      'envelope_liner_pattern_type',
+      'envelope_liner_color',
     ] as const;
 
     for (const k of allow) {

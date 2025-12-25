@@ -48,94 +48,254 @@ export default function Loading({
   const config = sizeConfig[size];
 
   const content = (
-    <div className="flex flex-col items-center justify-center gap-6">
+    <div className="flex flex-col items-center justify-center gap-8">
       {/* Main Spinner Container */}
       <div className="relative">
-        {/* Outer rotating ring */}
+        {/* Outer glow effect */}
+        <motion.div
+          animate={{ 
+            scale: [1, 1.15, 1],
+            opacity: [0.3, 0.6, 0.3]
+          }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          className={`absolute inset-0 rounded-full bg-gradient-to-r from-gold/20 via-burgundy/20 to-gold/20 blur-xl`}
+        />
+
+        {/* Outer rotating ring with gradient */}
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-          className={`${config.container} rounded-full border-2 border-gold/30`}
+          className={`${config.container} rounded-full relative border-4`}
+          style={{
+            background: 'linear-gradient(white, white) padding-box, linear-gradient(45deg, rgba(201, 168, 108, 0.4), rgba(139, 69, 19, 0.3), rgba(201, 168, 108, 0.4)) border-box',
+            border: '4px solid transparent',
+          }}
         >
-          {/* Gold accent dots */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-gold" />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-1.5 h-1.5 rounded-full bg-gold/60" />
+          {/* Gold accent dots with glow */}
+          <motion.div
+            animate={{ 
+              scale: [1, 1.3, 1],
+              opacity: [0.8, 1, 0.8]
+            }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-gold shadow-lg shadow-gold/50"
+          />
+          <motion.div
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.6, 0.9, 0.6]
+            }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-gold/80 shadow-md shadow-gold/40"
+          />
         </motion.div>
 
-        {/* Inner pulsing circle */}
+        {/* Middle rotating ring (counter-clockwise) */}
         <motion.div
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute inset-2 rounded-full bg-burgundy/10 flex items-center justify-center"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+          className="absolute inset-1 rounded-full border-2 border-gold/20"
         >
-          {/* Heart icon */}
+          {/* Decorative dots */}
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 rounded-full bg-gold/40"
+              style={{
+                top: '50%',
+                left: '50%',
+                transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-90%)`,
+              }}
+            />
+          ))}
+        </motion.div>
+
+        {/* Inner pulsing circle with gradient */}
+        <motion.div
+          animate={{ 
+            scale: [1, 1.15, 1],
+            rotate: [0, 180, 360]
+          }}
+          transition={{ 
+            scale: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
+            rotate: { duration: 8, repeat: Infinity, ease: 'linear' }
+          }}
+          className="absolute inset-3 rounded-full bg-gradient-to-br from-burgundy/20 via-burgundy/10 to-gold/10 flex items-center justify-center backdrop-blur-sm"
+        >
+          {/* Heart icon with glow */}
           <motion.div
-            animate={{ scale: [1, 0.9, 1] }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+            animate={{ 
+              scale: [1, 1.1, 1],
+              filter: ['brightness(1)', 'brightness(1.3)', 'brightness(1)']
+            }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            className="relative"
           >
+            <div className="absolute inset-0 blur-md bg-burgundy/30 rounded-full" />
             <Heart
-              className={`${config.icon} text-burgundy`}
+              className={`${config.icon} text-burgundy relative z-10 drop-shadow-lg`}
               fill="currentColor"
             />
           </motion.div>
         </motion.div>
 
-        {/* Floating feather */}
+        {/* Floating feathers with trail effect */}
         <motion.div
           animate={{
-            y: [-5, 5, -5],
-            rotate: [0, 10, -10, 0],
+            y: [-8, 8, -8],
+            rotate: [0, 15, -15, 0],
+            opacity: [0.4, 0.8, 0.4],
           }}
           transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
           className="absolute -top-4 -right-4"
         >
           <Feather className="w-5 h-5 text-gold/60" />
         </motion.div>
+        <motion.div
+          animate={{
+            y: [8, -8, 8],
+            rotate: [0, -15, 15, 0],
+            opacity: [0.3, 0.7, 0.3],
+          }}
+          transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute -bottom-4 -left-4"
+        >
+          <Feather className="w-4 h-4 text-gold/50" />
+        </motion.div>
+
+        {/* Sparkle particles */}
+        {[0, 1, 2, 3].map((i) => (
+          <motion.div
+            key={i}
+            animate={{
+              scale: [0, 1, 0],
+              opacity: [0, 1, 0],
+              rotate: [0, 180, 360],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              delay: i * 0.5,
+              ease: 'easeInOut',
+            }}
+            className="absolute w-1 h-1 rounded-full bg-gold"
+            style={{
+              top: `${20 + i * 20}%`,
+              left: `${20 + (i % 2) * 60}%`,
+            }}
+          />
+        ))}
       </div>
 
-      {/* Loading Text */}
-      <div className="text-center">
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className={`font-elegant text-ink/60 ${config.text}`}
+      {/* Loading Text with elegant animation */}
+      <div className="text-center space-y-3">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+        >
+          <motion.p
+            animate={{ 
+              opacity: [0.6, 1, 0.6],
+            }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            className={`font-elegant text-ink/70 ${config.text} tracking-wide`}
         >
           {resolvedMessage}
         </motion.p>
+        </motion.div>
 
-        {/* Animated dots */}
-        <div className="flex items-center justify-center gap-1 mt-2">
+        {/* Elegant animated dots with gradient */}
+        <div className="flex items-center justify-center gap-2 mt-3">
           {[0, 1, 2].map((i) => (
-            <motion.span
+            <motion.div
               key={i}
-              animate={{ opacity: [0.3, 1, 0.3] }}
+              animate={{ 
+                scale: [0.8, 1.2, 0.8],
+                opacity: [0.4, 1, 0.4],
+                y: [0, -4, 0]
+              }}
               transition={{
-                duration: 1.2,
+                duration: 1.5,
                 repeat: Infinity,
-                delay: i * 0.2,
+                delay: i * 0.25,
                 ease: 'easeInOut',
               }}
-              className="w-1.5 h-1.5 rounded-full bg-gold"
+              className="w-2 h-2 rounded-full bg-gradient-to-br from-gold to-burgundy shadow-md shadow-gold/50"
             />
           ))}
         </div>
+
+        {/* Progress bar effect */}
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: '100%' }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          className="h-0.5 bg-gradient-to-r from-transparent via-gold/50 to-transparent rounded-full max-w-xs mx-auto"
+        />
       </div>
     </div>
   );
 
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-cream">
-        {/* Background decoration */}
-        <div className="absolute top-8 left-8 text-4xl text-gold/10 font-serif">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-cream via-cream-light to-cream backdrop-blur-sm"
+      >
+        {/* Animated background decorations */}
+        <motion.div
+          animate={{ 
+            rotate: [0, 360],
+            scale: [1, 1.1, 1]
+          }}
+          transition={{ 
+            rotate: { duration: 20, repeat: Infinity, ease: 'linear' },
+            scale: { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+          }}
+          className="absolute top-8 left-8 text-5xl text-gold/10 font-serif"
+        >
           ❧
-        </div>
-        <div className="absolute bottom-8 right-8 text-4xl text-gold/10 font-serif rotate-180">
+        </motion.div>
+        <motion.div
+          animate={{ 
+            rotate: [360, 0],
+            scale: [1, 1.15, 1]
+          }}
+          transition={{ 
+            rotate: { duration: 25, repeat: Infinity, ease: 'linear' },
+            scale: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }
+          }}
+          className="absolute bottom-8 right-8 text-5xl text-gold/10 font-serif"
+        >
           ❧
-        </div>
+        </motion.div>
+        
+        {/* Additional decorative elements */}
+        <motion.div
+          animate={{ 
+            opacity: [0.05, 0.15, 0.05],
+            scale: [1, 1.2, 1]
+          }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-1/4 right-1/4 w-32 h-32 rounded-full bg-gold/5 blur-3xl"
+        />
+        <motion.div
+          animate={{ 
+            opacity: [0.05, 0.15, 0.05],
+            scale: [1, 1.3, 1]
+          }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute bottom-1/4 left-1/4 w-40 h-40 rounded-full bg-burgundy/5 blur-3xl"
+        />
+
+        {/* Glassmorphism overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/10 backdrop-blur-[2px]" />
 
         {content}
-      </div>
+      </motion.div>
     );
   }
 
@@ -211,29 +371,98 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// INLINE SPINNER
+// INLINE SPINNER - Enhanced version
 // ═══════════════════════════════════════════════════════════════════════════════
-export function Spinner({ className = '' }: { className?: string }) {
+export function Spinner({ className = '', size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-6 h-6',
+    lg: 'w-8 h-8',
+  };
+
   return (
-    <svg
-      className={`animate-spin text-burgundy ${className}`}
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
+    <div className={`relative ${sizeClasses[size]} ${className}`}>
+      {/* Outer rotating ring */}
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        className="absolute inset-0 rounded-full border-2 border-gold/30 border-t-gold"
       />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      {/* Inner pulsing dot */}
+      <motion.div
+        animate={{ scale: [1, 1.2, 1], opacity: [0.6, 1, 0.6] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute inset-2 rounded-full bg-burgundy"
       />
-    </svg>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ELEGANT SPINNER - For admin pages and inline loading
+// ═══════════════════════════════════════════════════════════════════════════════
+export function ElegantSpinner({ className = '', size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeConfig = {
+    sm: { container: 'w-8 h-8', borderWidth: '2px', dot: 'w-1 h-1', dotSize: '4px' },
+    md: { container: 'w-12 h-12', borderWidth: '3px', dot: 'w-1.5 h-1.5', dotSize: '6px' },
+    lg: { container: 'w-16 h-16', borderWidth: '4px', dot: 'w-2 h-2', dotSize: '8px' },
+  };
+
+  const config = sizeConfig[size];
+
+  return (
+    <div className={`relative ${config.container} ${className}`}>
+      {/* Glow effect */}
+      <motion.div
+        animate={{ 
+          scale: [1, 1.2, 1],
+          opacity: [0.3, 0.6, 0.3]
+        }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute inset-0 rounded-full bg-gradient-to-r from-gold/20 via-burgundy/20 to-gold/20 blur-md"
+      />
+
+      {/* Outer rotating ring with gradient */}
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+        className="absolute inset-0 rounded-full border-transparent"
+        style={{
+          background: 'linear-gradient(white, white) padding-box, linear-gradient(45deg, rgba(201, 168, 108, 0.5), rgba(139, 69, 19, 0.4), rgba(201, 168, 108, 0.5)) border-box',
+          border: `${config.borderWidth} solid transparent`,
+        }}
+      >
+        {/* Accent dot */}
+        <motion.div
+          animate={{ 
+            scale: [1, 1.3, 1],
+            opacity: [0.7, 1, 0.7]
+          }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-lg shadow-gold/50"
+          style={{ width: config.dotSize, height: config.dotSize }}
+        />
+      </motion.div>
+
+      {/* Inner pulsing circle */}
+      <motion.div
+        animate={{ 
+          scale: [1, 1.1, 1],
+          rotate: [0, 180, 360]
+        }}
+        transition={{ 
+          scale: { duration: 1.5, repeat: Infinity, ease: 'easeInOut' },
+          rotate: { duration: 3, repeat: Infinity, ease: 'linear' }
+        }}
+        className="absolute inset-2 rounded-full bg-gradient-to-br from-burgundy/15 to-gold/10 flex items-center justify-center"
+      >
+        {/* Center dot */}
+        <motion.div
+          animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+          className={`${config.dot} rounded-full bg-burgundy shadow-md`}
+      />
+      </motion.div>
+    </div>
   );
 }

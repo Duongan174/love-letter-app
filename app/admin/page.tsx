@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { 
   Users, FileHeart, TrendingUp, Heart, 
-  ArrowUpRight, ArrowDownRight, Eye
+  ArrowUpRight, Eye, Feather, Crown, Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-// 1. Import PromoCodeButton
 import PromoCodeButton from '@/components/ui/PromoCodeButton';
+import { ElegantSpinner } from '@/components/ui/Loading';
 
 interface Stats {
   totalUsers: number;
@@ -28,40 +29,34 @@ export default function AdminDashboard() {
     recentUsers: [],
   });
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null); // State lưu admin hiện tại
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Lấy thông tin session của admin/user đang đăng nhập
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
 
-      // Fetch users count
       const { count: usersCount } = await supabase
         .from('users')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch cards count and total views
       const { data: cards } = await supabase
         .from('cards')
         .select('id, view_count, created_at, recipient_name, sender_name');
 
       const totalViews = cards?.reduce((sum, card) => sum + (card.view_count || 0), 0) || 0;
 
-      // Fetch total Tym in circulation
       const { data: users } = await supabase
         .from('users')
         .select('points');
       const totalTym = users?.reduce((sum, user) => sum + (user.points || 0), 0) || 0;
 
-      // Recent cards
       const { data: recentCards } = await supabase
         .from('cards')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(5);
 
-      // Recent users
       const { data: recentUsers } = await supabase
         .from('users')
         .select('*')
@@ -83,41 +78,49 @@ export default function AdminDashboard() {
   }, []);
 
   const statCards = [
-    { label: 'Tổng người dùng', value: stats.totalUsers, icon: Users, color: 'blue', change: '+12%' },
-    { label: 'Thiệp đã tạo', value: stats.totalCards, icon: FileHeart, color: 'rose', change: '+8%' },
-    { label: 'Lượt xem thiệp', value: stats.totalViews, icon: Eye, color: 'green', change: '+24%' },
-    { label: 'Tổng Tym', value: stats.totalTym, icon: Heart, color: 'purple', change: '0%' },
+    { label: 'Tổng người dùng', value: stats.totalUsers, icon: Users, gradient: 'from-blue-500 to-blue-600', bgLight: 'bg-blue-50', textColor: 'text-blue-600', change: '+12%' },
+    { label: 'Thiệp đã tạo', value: stats.totalCards, icon: FileHeart, gradient: 'from-burgundy to-burgundy-dark', bgLight: 'bg-burgundy/10', textColor: 'text-burgundy', change: '+8%' },
+    { label: 'Lượt xem thiệp', value: stats.totalViews, icon: Eye, gradient: 'from-emerald-500 to-emerald-600', bgLight: 'bg-emerald-50', textColor: 'text-emerald-600', change: '+24%' },
+    { label: 'Tổng Tym', value: stats.totalTym, icon: Heart, gradient: 'from-purple-500 to-purple-600', bgLight: 'bg-purple-50', textColor: 'text-purple-600', change: '0%' },
   ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin" />
+        <ElegantSpinner size="md" />
       </div>
     );
   }
 
   return (
     <div>
-      {/* Header với tiêu đề và nút Promo Code */}
+      {/* Header */}
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-500">Tổng quan hệ thống</p>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-xl bg-burgundy/10 flex items-center justify-center">
+              <Crown className="w-5 h-5 text-burgundy" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-ink">Dashboard</h1>
+          </div>
+          <p className="text-ink/60 font-vn pl-13">Tổng quan hệ thống Echo Cards</p>
         </div>
 
-        {/* Nút Promo Code hiển thị nếu user (admin) đã login */}
         {currentUser && (
           <div className="flex items-center gap-3">
             <PromoCodeButton 
               userId={currentUser.id} 
-              onBalanceUpdate={(newBalance) => {
-                // Tùy chọn: Load lại trang để cập nhật điểm trên header chung
-                window.location.reload();
-              }}
+              onBalanceUpdate={() => window.location.reload()}
             />
           </div>
         )}
+      </div>
+
+      {/* Decorative Divider */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gold/30 to-transparent" />
+        <Feather className="w-4 h-4 text-gold/40" />
+        <div className="flex-1 h-px bg-gradient-to-l from-transparent via-gold/30 to-transparent" />
       </div>
 
       {/* Stats Grid */}
@@ -126,73 +129,130 @@ export default function AdminDashboard() {
           const Icon = stat.icon;
           const isPositive = stat.change.startsWith('+');
           return (
-            <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <motion.div 
+              key={index} 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-cream-light rounded-2xl p-6 border border-gold/20 shadow-sm hover:shadow-md transition"
+            >
               <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-${stat.color}-100`}>
-                  <Icon className={`w-6 h-6 text-${stat.color}-500`} />
+                <div className={`w-12 h-12 rounded-xl ${stat.bgLight} flex items-center justify-center`}>
+                  <Icon className={`w-6 h-6 ${stat.textColor}`} />
                 </div>
-                <span className={`flex items-center text-sm ${isPositive ? 'text-green-500' : 'text-gray-500'}`}>
+                {isPositive && stat.change !== '+0%' && (
+                  <span className="flex items-center text-sm text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
                   {stat.change}
-                  {isPositive ? <ArrowUpRight className="w-4 h-4" /> : null}
+                    <ArrowUpRight className="w-3 h-3 ml-0.5" />
                 </span>
+                )}
               </div>
-              <h3 className="text-3xl font-bold text-gray-800 mb-1">{stat.value.toLocaleString()}</h3>
-              <p className="text-gray-500 text-sm">{stat.label}</p>
-            </div>
+              <h3 className="text-3xl font-display font-bold text-ink mb-1">{stat.value.toLocaleString()}</h3>
+              <p className="text-ink/60 text-sm font-vn">{stat.label}</p>
+            </motion.div>
           );
         })}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Recent Cards */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Thiệp mới tạo</h2>
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-cream-light rounded-2xl p-6 border border-gold/20 shadow-sm"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <FileHeart className="w-5 h-5 text-burgundy" />
+            <h2 className="text-lg font-display font-bold text-ink">Thiệp mới tạo</h2>
+          </div>
           <div className="space-y-3">
             {stats.recentCards.length > 0 ? (
-              stats.recentCards.map((card) => (
-                <div key={card.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              stats.recentCards.map((card, index) => (
+                <motion.div 
+                  key={card.id} 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="flex items-center justify-between p-4 bg-cream rounded-xl border border-gold/10"
+                >
                   <div>
-                    <p className="font-medium text-gray-800">Gửi: {card.recipient_name}</p>
-                    <p className="text-sm text-gray-500">Từ: {card.sender_name}</p>
+                    <p className="font-vn font-medium text-ink">Gửi: {card.recipient_name}</p>
+                    <p className="text-sm text-ink/60 font-vn">Từ: {card.sender_name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-500">{new Date(card.created_at).toLocaleDateString('vi-VN')}</p>
-                    <p className="text-xs text-gray-400">{card.view_count || 0} views</p>
+                    <p className="text-sm text-ink/60 font-vn">{new Date(card.created_at).toLocaleDateString('vi-VN')}</p>
+                    <p className="text-xs text-ink/40 flex items-center justify-end gap-1">
+                      <Eye className="w-3 h-3" />
+                      {card.view_count || 0}
+                    </p>
                   </div>
-                </div>
+                </motion.div>
               ))
             ) : (
-              <p className="text-gray-500 text-center py-4">Chưa có thiệp nào</p>
+              <div className="text-center py-8">
+                <FileHeart className="w-12 h-12 text-ink/20 mx-auto mb-2" />
+                <p className="text-ink/50 font-vn">Chưa có thiệp nào</p>
+              </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Recent Users */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Người dùng mới</h2>
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-cream-light rounded-2xl p-6 border border-gold/20 shadow-sm"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-5 h-5 text-burgundy" />
+            <h2 className="text-lg font-display font-bold text-ink">Người dùng mới</h2>
+          </div>
           <div className="space-y-3">
             {stats.recentUsers.length > 0 ? (
-              stats.recentUsers.map((user) => (
-                <div key={user.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+              stats.recentUsers.map((user, index) => (
+                <motion.div 
+                  key={user.id} 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="flex items-center gap-3 p-4 bg-cream rounded-xl border border-gold/10"
+                >
                   <img
-                    src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=f43f5e&color=fff`}
+                    src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=8b2346&color=fff`}
                     alt={user.name}
-                    className="w-10 h-10 rounded-full"
+                    className="w-10 h-10 rounded-full ring-2 ring-gold/20"
                   />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{user.name}</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-vn font-medium text-ink truncate">{user.name}</p>
+                    <p className="text-sm text-ink/60 truncate">{user.email}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-rose-500">💜 {user.points}</p>
-                    <p className="text-xs text-gray-400 uppercase">{user.provider || 'email'}</p>
+                    <p className="font-medium text-burgundy flex items-center gap-1">
+                      <Heart className="w-3 h-3" fill="currentColor" />
+                      {user.points}
+                    </p>
+                    <p className="text-xs text-ink/40 uppercase font-medium">{user.provider || 'email'}</p>
                   </div>
-                </div>
+                </motion.div>
               ))
             ) : (
-              <p className="text-gray-500 text-center py-4">Chưa có người dùng</p>
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-ink/20 mx-auto mb-2" />
+                <p className="text-ink/50 font-vn">Chưa có người dùng</p>
+              </div>
             )}
           </div>
+        </motion.div>
+      </div>
+
+      {/* Footer decoration */}
+      <div className="mt-8 text-center">
+        <div className="inline-flex items-center gap-2 text-ink/30 text-sm">
+          <Sparkles className="w-4 h-4" />
+          <span className="font-elegant">Echo Cards Admin Panel</span>
+          <Sparkles className="w-4 h-4" />
         </div>
       </div>
     </div>

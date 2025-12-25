@@ -1,194 +1,447 @@
 // components/create/Step1Envelope.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import Envelope3D, { type SealDesign } from './Envelope3D';
+import { Palette } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import Envelope3D from './Envelope3D';
-import { Loader2, Sparkles, Mail, Check } from 'lucide-react';
+
+// ✅ Import envelope patterns từ hệ thống mới (100+ mẫu)
+import { 
+  ENVELOPE_PATTERNS as NEW_ENVELOPE_PATTERNS,
+  getEnvelopePatternStyle,
+  ENVELOPE_PATTERN_CATEGORIES,
+  type DesignTier,
+} from '@/lib/design-presets';
+
+// Convert sang format cũ để tương thích
+const ENVELOPE_PATTERNS = NEW_ENVELOPE_PATTERNS.map(p => ({
+  id: p.id,
+  name: p.nameVi,
+  preview: p.preview,
+  tier: p.tier,
+  category: p.category,
+}));
+
+// Seal designs
+const SEAL_DESIGNS = [
+  { id: 'heart' as SealDesign, name: 'Trái tim', color: '#c62828' },
+  { id: 'star' as SealDesign, name: 'Ngôi sao', color: '#f57f17' },
+  { id: 'crown' as SealDesign, name: 'Vương miện', color: '#f9a825' },
+  { id: 'flower' as SealDesign, name: 'Hoa', color: '#e91e63' },
+  { id: 'sparkle' as SealDesign, name: 'Lấp lánh', color: '#9c27b0' },
+  { id: 'mail' as SealDesign, name: 'Thư', color: '#1976d2' },
+];
+
+// EnvelopePattern type
+type EnvelopePattern = string;
+
+// Helper function
+function shade(hex: string, amt: number) {
+  const c = (hex ?? '#c9a86c').replace('#', '');
+  const full = c.length === 3 ? c.split('').map((x) => x + x).join('') : c;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return hex;
+  const num = parseInt(full, 16);
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 255) + amt));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 255) + amt));
+  const b = Math.max(0, Math.min(255, (num & 255) + amt));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
 
 interface Step1EnvelopeProps {
   selectedEnvelope: any;
   onSelectEnvelope: (env: any) => void;
 }
 
+type EnvelopeSide = 'front' | 'back';
+
 export default function Step1Envelope({
   selectedEnvelope,
   onSelectEnvelope,
 }: Step1EnvelopeProps) {
-  const [envelopes, setEnvelopes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  // Envelope customization state
+  const [selectedPattern, setSelectedPattern] = useState<EnvelopePattern>('solid');
+  const [selectedSeal, setSelectedSeal] = useState<SealDesign>('heart');
+  const [selectedSealColor, setSelectedSealColor] = useState('#c62828');
+  const [envelopeSide, setEnvelopeSide] = useState<EnvelopeSide>('back');
+  const [isOpen, setIsOpen] = useState(false);
+  const [defaultEnvelopeFromDB, setDefaultEnvelopeFromDB] = useState<any>(null);
+  const [loadingDefault, setLoadingDefault] = useState(true);
+  
+  // New customization states
+  const [envelopeBaseColor, setEnvelopeBaseColor] = useState(selectedEnvelope?.color || '#f8bbd0');
+  const [patternColor, setPatternColor] = useState('#5d4037');
+  const [patternIntensity, setPatternIntensity] = useState(0.15);
+  
+  // Load default envelope from database if none selected
   useEffect(() => {
-    supabase.from('envelopes').select('*').order('points_required').then(({ data }) => {
-      setEnvelopes(data || []);
-      setLoading(false);
-    });
-  }, []);
+    const loadDefaultEnvelope = async () => {
+    if (!selectedEnvelope && loadingDefault) {
+        try {
+          const { data, error } = await supabase
+        .from('envelopes')
+        .select('*')
+        .order('points_required', { ascending: true })
+        .limit(1)
+            .single();
+          
+          if (data && !error) {
+            setDefaultEnvelopeFromDB(data);
+            setEnvelopeBaseColor(data.color || '#f8bbd0');
+            // Auto-select this envelope
+            onSelectEnvelope({
+              ...data,
+              color: data.color || envelopeBaseColor,
+              pattern: selectedPattern,
+              patternColor,
+              patternIntensity,
+              sealDesign: selectedSeal,
+              sealColor: selectedSealColor,
+            });
+          }
+        } catch {
+          // Silently handle error
+        }
+          setLoadingDefault(false);
+    } else {
+      setLoadingDefault(false);
+    }
+    };
+    loadDefaultEnvelope();
+  }, []); // Only run once on mount
+  
+  // Default envelope - use selected or default from DB
+  const defaultEnvelope = selectedEnvelope || defaultEnvelopeFromDB || {
+    id: null,
+    color: envelopeBaseColor,
+    texture: null,
+    liner_pattern: null,
+    stamp_url: null,
+    points_required: 0,
+  };
+  
+  // Preset color combinations (dựa trên hình ảnh)
+  const COLOR_PRESETS = [
+    { name: 'Olive Green', base: '#6b7c3f', pattern: '#4a5a2a', intensity: 0.2 },
+    { name: 'Deep Purple', base: '#6a1b9a', pattern: '#4a148c', intensity: 0.18 },
+    { name: 'Soft Pink', base: '#f8bbd0', pattern: '#f48fb1', intensity: 0.25 },
+    { name: 'Vibrant Teal', base: '#00897b', pattern: '#00695c', intensity: 0.22 },
+    { name: 'Light Blue', base: '#90caf9', pattern: '#64b5f6', intensity: 0.2 },
+    { name: 'Warm Beige', base: '#d7ccc8', pattern: '#bcaaa4', intensity: 0.15 },
+    { name: 'Mint Green', base: '#a5d6a7', pattern: '#81c784', intensity: 0.18 },
+    { name: 'Cream White', base: '#fff8e1', pattern: '#ffecb3', intensity: 0.12 },
+  ];
+  
+  // Update base color when envelope changes - chỉ khi giá trị thực sự khác
+  // ✅ Sử dụng useRef để track giá trị trước đó, tránh vòng lặp vô hạn
+  const prevColorRef = useRef<string>('');
+  
+  useEffect(() => {
+    const newColor = selectedEnvelope?.color || defaultEnvelopeFromDB?.color;
+    // Chỉ set nếu có giá trị mới và khác với giá trị đã set trước đó
+    if (newColor && newColor !== prevColorRef.current) {
+      prevColorRef.current = newColor;
+      setEnvelopeBaseColor(newColor);
+    }
+  }, [selectedEnvelope?.color, defaultEnvelopeFromDB?.color]);
+
+  // When customization changes or default envelope loads, update the envelope
+  // ✅ Sử dụng useRef để track lần update trước, tránh vòng lặp vô hạn
+  const prevUpdateRef = useRef<string>('');
+  
+  useEffect(() => {
+    // Only update if we have a valid envelope (either selected or default from DB)
+    if (defaultEnvelope && defaultEnvelope.id) {
+      // Tạo signature để check xem có thay đổi thực sự không
+      const updateSignature = JSON.stringify({
+        color: envelopeBaseColor,
+        pattern: selectedPattern,
+        patternColor,
+        patternIntensity,
+        sealDesign: selectedSeal,
+        sealColor: selectedSealColor,
+        envelopeId: defaultEnvelope.id,
+      });
+      
+      // Chỉ gọi onSelectEnvelope nếu có thay đổi thực sự
+      if (updateSignature !== prevUpdateRef.current) {
+        prevUpdateRef.current = updateSignature;
+        onSelectEnvelope({
+          ...defaultEnvelope,
+          color: envelopeBaseColor,
+          pattern: selectedPattern,
+          patternColor,
+          patternIntensity,
+          sealDesign: selectedSeal,
+          sealColor: selectedSealColor,
+      });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPattern, selectedSeal, selectedSealColor, envelopeBaseColor, patternColor, patternIntensity, defaultEnvelope?.id]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start max-w-6xl mx-auto px-4">
-      
-      {/* ═══ CỘT TRÁI: PREVIEW 3D ═══ */}
-      <motion.div 
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="relative"
-      >
-        {/* Decorative Frame */}
-        <div className="absolute -inset-4 border-2 border-gold/20 rounded-3xl pointer-events-none" />
-        <div className="absolute -inset-2 border border-gold/10 rounded-2xl pointer-events-none" />
-        
-        <div className="bg-gradient-to-br from-cream via-cream-light to-aged-paper rounded-2xl p-8 min-h-[420px] flex items-center justify-center relative overflow-hidden">
-          {/* Background Pattern */}
-          <div className="absolute inset-0 opacity-5">
-            <div className="absolute top-4 left-4 text-4xl text-burgundy">❧</div>
-            <div className="absolute bottom-4 right-4 text-4xl text-burgundy rotate-180">❧</div>
+    <div className="flex h-full gap-8 p-6">
+      {/* Left Panel - Customization Only */}
+      <div className="w-96 bg-white/80 backdrop-blur-xl rounded-2xl border border-amber-100/50 overflow-y-auto shadow-2xl">
+        <div className="p-6 border-b border-amber-100/50 sticky top-0 bg-gradient-to-b from-white via-amber-50/30 to-white backdrop-blur-xl z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl shadow-lg">
+              <Palette className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-800">
+                Tùy chỉnh phong bì
+              </h3>
+              <p className="text-xs text-gray-500">Thiết kế phong bì của bạn</p>
+            </div>
           </div>
-          
-          {selectedEnvelope ? (
-            <motion.div
-              key={selectedEnvelope.id}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-            >
-              <Envelope3D 
-                color={selectedEnvelope.color} 
-                texture={selectedEnvelope.thumbnail} 
-                isOpen={false} 
-              />
-            </motion.div>
-          ) : (
-            <div className="text-center space-y-4">
+        </div>
+        
+        <div className="p-6 space-y-6">
+          {/* Color Presets */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+              Bộ màu gợi ý
+            </p>
+            <div className="grid grid-cols-4 gap-3">
+              {COLOR_PRESETS.map((preset, idx) => (
+                <motion.button
+                  key={idx}
+                  onClick={() => {
+                    setEnvelopeBaseColor(preset.base);
+                    setPatternColor(preset.pattern);
+                    setPatternIntensity(preset.intensity);
+                  }}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3 py-3 rounded-xl border-2 border-gray-200 bg-white hover:border-amber-400 transition-all group shadow-sm hover:shadow-lg"
+                  style={{ borderColor: preset.base + '40' }}
+                >
+                  <div 
+                    className="w-full h-10 rounded-lg mb-2 relative overflow-hidden shadow-inner"
+                    style={{ backgroundColor: preset.base }}
+                  >
+                    <div 
+                      className="absolute inset-0 opacity-30"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='${encodeURIComponent(preset.pattern)}' fill-opacity='0.3'%3E%3Ccircle cx='3' cy='3' r='1.5'/%3E%3Ccircle cx='13' cy='13' r='1.5'/%3E%3C/g%3E%3C/svg%3E")`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-gray-700 group-hover:text-gray-900 text-[11px] font-medium">{preset.name}</div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Envelope Base Color */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+              Màu nền phong bì
+            </p>
+            <div className="flex items-center gap-3">
               <motion.div
-                animate={{ y: [0, -8, 0] }}
-                transition={{ duration: 2, repeat: Infinity }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                className="relative"
               >
-                <Mail className="w-16 h-16 text-burgundy/30 mx-auto" />
+                <input
+                  type="color"
+                  value={envelopeBaseColor}
+                  onChange={(e) => setEnvelopeBaseColor(e.target.value)}
+                  className="w-16 h-16 rounded-xl border-3 border-gray-200 cursor-pointer shadow-lg hover:shadow-xl transition-all"
+                  style={{ borderColor: envelopeBaseColor + '40' }}
+                />
+                <div className="absolute inset-0 rounded-xl border-2 border-white pointer-events-none"></div>
               </motion.div>
-              <p className="font-elegant text-lg text-ink/50 italic">
-                Chọn một chiếc phong bì để bắt đầu...
+              <input
+                type="text"
+                value={envelopeBaseColor}
+                onChange={(e) => setEnvelopeBaseColor(e.target.value)}
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-800 text-sm font-mono focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all"
+                placeholder="#f8bbd0"
+              />
+            </div>
+          </div>
+
+          {/* Pattern Selection - với scroll cho 100+ patterns */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+              Họa tiết phong bì
+              <span className="text-xs font-normal text-gray-500">({ENVELOPE_PATTERNS.length} mẫu)</span>
+            </p>
+            <div className="max-h-64 overflow-y-auto border-2 border-gray-200 rounded-xl p-3 bg-gradient-to-b from-gray-50 to-white shadow-inner">
+              <div className="grid grid-cols-4 gap-2">
+                {ENVELOPE_PATTERNS.map((pat) => (
+                  <motion.button
+                    key={pat.id}
+                    onClick={() => setSelectedPattern(pat.id as EnvelopePattern)}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`relative px-3 py-3 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-1.5 ${
+                      selectedPattern === pat.id 
+                        ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg ring-2 ring-amber-300 ring-offset-2' 
+                        : 'bg-white text-gray-700 hover:bg-amber-50 border-2 border-gray-200 hover:border-amber-300 shadow-sm hover:shadow-md'
+                    }`}
+                    title={pat.name}
+                  >
+                    {pat.preview && <span className="text-lg">{pat.preview}</span>}
+                    <span className="truncate w-full text-center text-[10px]">{pat.name}</span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Pattern Color */}
+          {selectedPattern !== 'solid' && (
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+                Màu họa tiết
               </p>
+              <div className="flex items-center gap-3">
+                <motion.div
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="relative"
+                >
+                  <input
+                    type="color"
+                    value={patternColor}
+                    onChange={(e) => setPatternColor(e.target.value)}
+                    className="w-14 h-14 rounded-xl border-3 border-gray-200 cursor-pointer shadow-lg hover:shadow-xl transition-all"
+                    style={{ borderColor: patternColor + '40' }}
+                  />
+                  <div className="absolute inset-0 rounded-xl border-2 border-white pointer-events-none"></div>
+                </motion.div>
+                <input
+                  type="text"
+                  value={patternColor}
+                  onChange={(e) => setPatternColor(e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-800 text-sm font-mono focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all"
+                  placeholder="#5d4037"
+                />
+              </div>
             </div>
           )}
-        </div>
-      </motion.div>
 
-      {/* ═══ CỘT PHẢI: SELECTION ═══ */}
-      <motion.div 
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.1 }}
-        className="space-y-6"
-      >
-        {/* Header */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-burgundy/10 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-burgundy" />
+          {/* Pattern Intensity */}
+          {selectedPattern !== 'solid' && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+                  Độ đậm họa tiết
+                </p>
+                <span className="text-sm font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
+                  {Math.round(patternIntensity * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={patternIntensity}
+                onChange={(e) => setPatternIntensity(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gradient-to-r from-gray-200 via-amber-200 to-amber-400 rounded-full appearance-none cursor-pointer accent-amber-600 shadow-inner"
+                style={{
+                  background: `linear-gradient(to right, #e5e7eb 0%, #e5e7eb ${patternIntensity * 100}%, #fbbf24 ${patternIntensity * 100}%, #f59e0b 100%)`
+                }}
+              />
             </div>
-            <h3 className="font-display text-2xl font-bold text-ink">
-              Chọn Mẫu Phong Bì
-            </h3>
-          </div>
-          <p className="font-vn text-ink/60 pl-13">
-            Chiếc áo choàng đầu tiên cho thông điệp của bạn
-          </p>
-        </div>
+          )}
 
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gold/40 to-transparent" />
-          <span className="text-gold/60 text-sm">✦</span>
-          <div className="flex-1 h-px bg-gradient-to-l from-transparent via-gold/40 to-transparent" />
-        </div>
 
-        {/* Grid Selection */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-burgundy" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {envelopes.map((env, index) => {
-              const isSelected = selectedEnvelope?.id === env.id;
-              
-              return (
-                <motion.button
-                  key={env.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  onClick={() => onSelectEnvelope(env)}
-                  className={`
-                    relative p-4 rounded-xl border-2 transition-all duration-300
-                    flex flex-col items-center gap-3 group
-                    ${isSelected 
-                      ? 'border-burgundy bg-burgundy/5 shadow-lg ring-2 ring-burgundy/20' 
-                      : 'border-gold/20 bg-cream hover:border-gold/50 hover:shadow-md'
-                    }
-                  `}
-                >
-                  {/* Selected Check */}
-                  {isSelected && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-2 -right-2 w-6 h-6 bg-burgundy rounded-full flex items-center justify-center shadow-md"
-                    >
-                      <Check className="w-4 h-4 text-cream-light" />
-                    </motion.div>
-                  )}
-
-                  {/* Envelope Preview */}
-                  <div 
-                    className="w-full h-20 rounded-lg shadow-inner transition-transform duration-300 group-hover:scale-105 relative overflow-hidden"
-                    style={{ 
-                      backgroundColor: env.color || '#eee',
-                      backgroundImage: env.thumbnail ? `url(${env.thumbnail})` : 'none',
-                      backgroundSize: 'cover',
-                    }}
-                  >
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent" />
-                  </div>
-
-                  {/* Info */}
-                  <div className="text-center w-full space-y-1">
-                    <p className="font-vn text-sm font-semibold text-ink truncate">
-                      {env.name}
-                    </p>
-                    <span className={`
-                      inline-block text-xs font-bold px-3 py-1 rounded-full
-                      ${env.points_required === 0 
-                        ? 'bg-forest/10 text-forest' 
-                        : 'bg-gold/10 text-gold-dark'
-                      }
-                    `}>
-                      {env.points_required === 0 ? '✓ Miễn phí' : `${env.points_required} Tym`}
-                    </span>
-                  </div>
-                </motion.button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Hint */}
-        {selectedEnvelope && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 p-3 bg-burgundy/5 rounded-lg border border-burgundy/10"
-          >
-            <Check className="w-4 h-4 text-burgundy" />
-            <p className="font-vn text-sm text-burgundy">
-              Đã chọn: <strong>{selectedEnvelope.name}</strong>
+          {/* Seal Selection */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
+              Con dấu sáp
             </p>
+            <div className="flex flex-wrap gap-3">
+              {SEAL_DESIGNS.map((seal) => (
+                <motion.button
+                  key={seal.id}
+                  onClick={() => {
+                    setSelectedSeal(seal.id);
+                    setSelectedSealColor(seal.color);
+                  }}
+                  whileHover={{ scale: 1.1, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                    selectedSeal === seal.id 
+                      ? 'ring-4 ring-offset-2 ring-amber-400 scale-110 shadow-xl' 
+                      : 'hover:shadow-xl'
+                  }`}
+                  style={{ 
+                    background: `radial-gradient(circle at 30% 30%, ${shade(seal.color, 40)} 0%, ${seal.color} 50%, ${shade(seal.color, -40)} 100%)`,
+                  }}
+                  title={seal.name}
+                >
+                  <span className="text-white text-sm font-bold drop-shadow-lg">{seal.name.charAt(0)}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel - Large Preview */}
+      <div className="flex-1 flex flex-col">
+        {/* Large Preview Section */}
+        <div className="flex-1 bg-gradient-to-br from-gray-50 via-white to-amber-50/20 rounded-2xl border-2 border-gray-200/50 shadow-2xl p-12 flex items-center justify-center relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute inset-0 opacity-5">
+            <div className="absolute top-10 left-10 w-32 h-32 bg-amber-400 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-10 right-10 w-40 h-40 bg-rose-400 rounded-full blur-3xl"></div>
+          </div>
+          
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="relative w-full z-10"
+          >
+            <motion.div
+              key={`${defaultEnvelope.id}-${envelopeBaseColor}-${selectedPattern}`}
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+              className="flex flex-col items-center gap-6"
+            >
+              <div className="text-center mb-2">
+                <h4 className="text-lg font-semibold text-gray-800 mb-1">Xem trước phong bì</h4>
+                <p className="text-sm text-gray-500">Nhấn vào con dấu để mở/đóng</p>
+              </div>
+              <div className="transform scale-125">
+                <Envelope3D
+                  color={envelopeBaseColor}
+                  pattern={selectedPattern}
+                  patternColor={patternColor}
+                  patternIntensity={patternIntensity}
+                  texture={defaultEnvelope.texture ?? defaultEnvelope.thumbnail}
+                  stampUrl={defaultEnvelope.stamp_url || 'https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?w=150&q=80'}
+                  sealDesign={selectedSeal}
+                  sealColor={selectedSealColor}
+                  isOpen={isOpen}
+                  isFlipped={envelopeSide === 'back'}
+                  showControls
+                  onOpen={() => setIsOpen(true)}
+                  onClose={() => setIsOpen(false)}
+                  onFlip={() => setEnvelopeSide(s => s === 'front' ? 'back' : 'front')}
+                />
+              </div>
+            </motion.div>
           </motion.div>
-        )}
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

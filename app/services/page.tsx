@@ -194,7 +194,7 @@ export default function ServicesPage() {
                   </Button>
                 </Link>
                 <Link href="/demo">
-                  <Button variant="outline" className="text-white border-white/30 hover:bg-white/10">
+                  <Button variant="secondary" className="text-white border-white/30 hover:bg-white/10">
                     Xem Demo Doanh nghiệp
                   </Button>
                 </Link>

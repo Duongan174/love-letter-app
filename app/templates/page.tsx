@@ -251,7 +251,7 @@ const handleSelectTemplate = async (templateId: string) => {
                     )}
 
                     {/* Thumbnail */}
-                    <div className="relative aspect-[4/5] overflow-hidden bg-cream">
+                    <div className="relative aspect-[3/4] overflow-hidden bg-cream">
                       {isVideo(template.thumbnail) ? (
                         <>
                           <video

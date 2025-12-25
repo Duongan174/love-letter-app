@@ -102,9 +102,45 @@ export default function AdminMusic() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Bạn có chắc muốn xóa nhạc này?')) {
-      await supabase.from('music').delete().eq('id', id);
+    if (!confirm('Bạn có chắc muốn xóa nhạc này? Các card và draft đang sử dụng nhạc này sẽ bị ảnh hưởng.')) return;
+    
+    try {
+      // Kiểm tra xem có card nào đang sử dụng music này không
+      const { data: cardsUsingMusic } = await supabase
+        .from('cards')
+        .select('id')
+        .eq('music_id', id)
+        .limit(1);
+      
+      const { data: draftsUsingMusic } = await supabase
+        .from('card_drafts')
+        .select('id')
+        .eq('music_id', id)
+        .limit(1);
+      
+      if (cardsUsingMusic && cardsUsingMusic.length > 0) {
+        alert('Không thể xóa nhạc này vì đang có card đang sử dụng. Vui lòng xóa các card liên quan trước.');
+        return;
+      }
+      
+      if (draftsUsingMusic && draftsUsingMusic.length > 0) {
+        // Set music_id = null cho các draft đang sử dụng
+        await supabase.from('card_drafts').update({ music_id: null }).eq('music_id', id);
+      }
+      
+      // Xóa music
+      const { error } = await supabase.from('music').delete().eq('id', id);
+      
+      if (error) {
+        console.error('Delete error:', error);
+        alert('Lỗi xóa nhạc: ' + error.message);
+        return;
+      }
+      
       fetchMusic();
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      alert('Lỗi xóa nhạc: ' + (error.message || 'Đã có lỗi xảy ra'));
     }
   };
 

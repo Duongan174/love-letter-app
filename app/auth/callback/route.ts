@@ -11,8 +11,8 @@ function resolveEmail(user: any): string | null {
 
 /**
  * Supabase OAuth callback
- * - MUST be a Route Handler to allow setting auth cookies (App Router).
- * - Also protects against open-redirect via `next` param.
+ * - Route Handler để set auth cookies (App Router).
+ * - Chặn open-redirect qua `next` param.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);

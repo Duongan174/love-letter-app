@@ -1080,11 +1080,129 @@ h1, h2, h3, h4, h5, h6 {
    ───────────────────────────────────────────────────────────────────────────── */
 
 /* Force Vietnamese font for all Vietnamese text */
+/* EXCLUDE TipTap editor elements - they use their own font system */
 [lang="vi"],
 .text-vn,
 h1, h2, h3, h4, h5, h6,
-p, span, a, button, label, input, textarea {
+a, button, label, input, textarea {
   font-family: 'Be Vietnam Pro', var(--font-body), system-ui, sans-serif !important;
+}
+
+/* Apply to p and span ONLY if NOT inside .ProseMirror, .letter-content, or .rich-text-content */
+/* These classes are used for rendered HTML content where inline font-family should be preserved */
+p:not(.ProseMirror p):not(.ProseMirror *):not(.letter-content p):not(.letter-content *):not(.rich-text-content p):not(.rich-text-content *),
+span:not(.ProseMirror span):not(.ProseMirror *):not(.letter-content span):not(.letter-content *):not(.rich-text-content span):not(.rich-text-content *) {
+  font-family: 'Be Vietnam Pro', var(--font-body), system-ui, sans-serif !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   26. TIPTAP EDITOR FONT-FAMILY OVERRIDE
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Default font for TipTap editor content */
+.ProseMirror,
+.ProseMirror p,
+.ProseMirror span {
+  font-family: 'Be Vietnam Pro', var(--font-body), system-ui, sans-serif;
+}
+
+/* CRITICAL: Override font-family for elements with custom font */
+/* Use CSS variable set by JavaScript - this has highest priority with !important */
+.ProseMirror span[data-font-family],
+.ProseMirror [data-font-family] {
+  font-family: var(--tiptap-font-family) !important;
+}
+
+/* Additional selectors for maximum compatibility */
+.ProseMirror p span[data-font-family],
+.ProseMirror p [data-font-family],
+div.ProseMirror span[data-font-family],
+div.ProseMirror [data-font-family] {
+  font-family: var(--tiptap-font-family) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   27. RENDERED HTML FONT-FAMILY PRESERVATION (for saved view & card reader)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* 
+ * When HTML content with inline font-family is rendered via dangerouslySetInnerHTML,
+ * ensure the inline styles are preserved and not overridden by prose/global styles.
+ */
+
+/* Override prose font-family for spans with inline font-family */
+.prose span[style*="font-family"],
+.prose-lg span[style*="font-family"],
+.letter-content span[style*="font-family"],
+.rich-text-content span[style*="font-family"],
+[class*="prose"] span[style*="font-family"] {
+  font-family: inherit !important;
+}
+
+/* ✅ CRITICAL: Allow inline font-family to work in letter-content and rich-text-content */
+.letter-content span,
+.letter-content p,
+.rich-text-content span,
+.rich-text-content p {
+  font-family: inherit;
+}
+
+/* ✅ Force inline style to take precedence for any element with style attribute containing font-family */
+.letter-content [style*="font-family"],
+.rich-text-content [style*="font-family"],
+.letter-content span[style],
+.rich-text-content span[style] {
+  /* This rule has no !important, allowing inline style to take precedence */
+  font-family: unset;
+}
+
+/* Common font families - ensure they are applied correctly */
+span[style*="Dancing Script"],
+p span[style*="Dancing Script"],
+div span[style*="Dancing Script"] {
+  font-family: 'Dancing Script', cursive !important;
+}
+
+span[style*="Great Vibes"],
+p span[style*="Great Vibes"],
+div span[style*="Great Vibes"] {
+  font-family: 'Great Vibes', cursive !important;
+}
+
+span[style*="Pacifico"],
+p span[style*="Pacifico"],
+div span[style*="Pacifico"] {
+  font-family: 'Pacifico', cursive !important;
+}
+
+span[style*="Playfair Display"],
+p span[style*="Playfair Display"],
+div span[style*="Playfair Display"] {
+  font-family: 'Playfair Display', serif !important;
+}
+
+span[style*="Crimson Pro"],
+p span[style*="Crimson Pro"],
+div span[style*="Crimson Pro"] {
+  font-family: 'Crimson Pro', serif !important;
+}
+
+span[style*="Cormorant Garamond"],
+p span[style*="Cormorant Garamond"],
+div span[style*="Cormorant Garamond"] {
+  font-family: 'Cormorant Garamond', serif !important;
+}
+
+span[style*="Be Vietnam Pro"],
+p span[style*="Be Vietnam Pro"],
+div span[style*="Be Vietnam Pro"] {
+  font-family: 'Be Vietnam Pro', sans-serif !important;
+}
+
+span[style*="Lexend"],
+p span[style*="Lexend"],
+div span[style*="Lexend"] {
+  font-family: 'Lexend', sans-serif !important;
 }
 
 /* Keep decorative fonts ONLY for English/no-diacritic text */

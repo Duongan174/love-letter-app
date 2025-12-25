@@ -8,6 +8,8 @@ export default function AdminSettings() {
   const [settings, setSettings] = useState({
     default_tym: 100,
     tym_per_card: 0,
+    free_pages: 2,
+    add_page_cost: 10,
     max_photos_per_card: 4,
     max_photo_size_mb: 25,
     allow_guest_view: true,
@@ -62,6 +64,7 @@ export default function AdminSettings() {
                 className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 min="0"
               />
+              <p className="text-xs text-gray-500 mt-1">Số Tym được cấp khi user đăng ký mới</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -74,6 +77,34 @@ export default function AdminSettings() {
                 className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 min="0"
               />
+              <p className="text-xs text-gray-500 mt-1">Chi phí Tym để tạo một thiệp</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Số trang miễn phí
+              </label>
+              <input
+                type="number"
+                value={settings.free_pages}
+                onChange={(e) => setSettings({ ...settings, free_pages: parseInt(e.target.value) || 1 })}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                min="1"
+                max="5"
+              />
+              <p className="text-xs text-gray-500 mt-1">Số trang thư được tạo miễn phí</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Chi phí thêm trang (Tym)
+              </label>
+              <input
+                type="number"
+                value={settings.add_page_cost}
+                onChange={(e) => setSettings({ ...settings, add_page_cost: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                min="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">Chi phí Tym để thêm mỗi trang sau trang miễn phí</p>
             </div>
           </div>
         </div>

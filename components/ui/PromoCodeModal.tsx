@@ -46,6 +46,11 @@ export default function PromoCodeModal({
       return;
     }
 
+    if (!userId || userId.trim() === '') {
+      setResult({ type: 'error', message: 'Vui lòng đăng nhập để sử dụng mã khuyến mãi' });
+      return;
+    }
+
     setLoading(true);
     setResult({ type: null, message: '' });
 
@@ -54,7 +59,7 @@ export default function PromoCodeModal({
       const response = await fetch('/api/promo/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code.trim(), userId }),
+        body: JSON.stringify({ code: code.trim(), user_id: userId }),
       });
 
       const data = await response.json();
@@ -65,12 +70,12 @@ export default function PromoCodeModal({
 
       setResult({ 
         type: 'success', 
-        message: `Chúc mừng! Bạn đã nhận được ${data.points} Tym!`,
-        points: data.points
+        message: `Chúc mừng! Bạn đã nhận được ${data.tym_received} Tym!`,
+        points: data.tym_received
       });
 
-      if (onSuccess && data.newBalance) {
-        onSuccess(data.newBalance);
+      if (onSuccess && data.new_balance) {
+        onSuccess(data.new_balance);
       }
 
       // Clear input after success

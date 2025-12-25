@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Heart, User, LogOut, Shield, 
-  Gift, Menu, X, LayoutDashboard, Feather, Crown
+  Gift, Menu, X, LayoutDashboard, Feather, Crown, Calendar
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth'; 
 import Button from '@/components/ui/Button';
@@ -163,8 +163,8 @@ export default function Header() {
                     >
                       {user.avatar ? (
                         <img 
-                          src={user.avatar} 
-                          alt={user.name} 
+                          src={user.avatar || undefined} 
+                          alt={user.name || undefined} 
                           className="w-8 h-8 rounded-full object-cover"
                         />
                       ) : (
@@ -193,8 +193,8 @@ export default function Header() {
                               <div className="flex items-center gap-3">
                                 {user.avatar ? (
                                   <img 
-                                    src={user.avatar} 
-                                    alt={user.name}
+                                    src={user.avatar || undefined} 
+                                    alt={user.name || undefined}
                                     className="w-12 h-12 rounded-full border-2 border-gold/50 object-cover"
                                   />
                                 ) : (
@@ -230,6 +230,15 @@ export default function Header() {
                               >
                                 <LayoutDashboard className="w-4 h-4 text-gold" />
                                 <span className="font-elegant">Tổng quan</span>
+                              </Link>
+                              
+                              <Link 
+                                href="/dashboard/events"
+                                onClick={() => setIsDropdownOpen(false)}
+                                className="flex items-center gap-3 px-3 py-2.5 rounded-vintage text-ink hover:bg-burgundy-50 hover:text-burgundy transition-colors"
+                              >
+                                <Calendar className="w-4 h-4 text-gold" />
+                                <span className="font-elegant">Sổ nợ cảm xúc</span>
                               </Link>
                               
                               <button
@@ -333,14 +342,17 @@ export default function Header() {
       </header>
 
       {/* Promo Code Modal */}
+      {user && user.id && (
       <PromoCodeModal 
         isOpen={showPromoModal} 
         onClose={() => setShowPromoModal(false)}
-        userId={user?.id || ''}
+          userId={user.id}
         onSuccess={(newBalance) => {
           // Optionally refresh user data
+            window.location.reload();
         }}
       />
+      )}
     </>
   );
 }
