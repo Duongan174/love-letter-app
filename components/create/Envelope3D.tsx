@@ -178,6 +178,7 @@ export default function Envelope3D({
   const baseColor = color || '#f8bbd0';
   const lighter = useMemo(() => lighten(baseColor, 30), [baseColor]);
   const darker = useMemo(() => darken(baseColor, 20), [baseColor]);
+  const lineColor = useMemo(() => darken(baseColor, 85), [baseColor]);
 
   // Resolve texture URL
   const textureUrl = useMemo(() => {
@@ -370,6 +371,24 @@ export default function Envelope3D({
                 <div className="h-0.5 bg-gray-700 rounded" style={{ width: '110px', opacity: 0.7 }}></div>
                 <div className="h-0.5 bg-gray-700 rounded" style={{ width: '90px', opacity: 0.7 }}></div>
               </div>
+            </div>
+
+            {/* ✅ Viền phong bì mặt trước */}
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 7 }}>
+              <svg className="w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="none">
+                <rect
+                  x="10"
+                  y="10"
+                  width="380"
+                  height="280"
+                  rx="6"
+                  ry="6"
+                  fill="none"
+                  stroke={lineColor}
+                  strokeWidth="6"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
 
             {/* Inner border */}
@@ -593,6 +612,42 @@ export default function Envelope3D({
                   }}
                 />
               </>
+            )}
+
+            {/* ✅ Đường nét phong bì mặt sau giống mẫu (X + viền) */}
+            {!internalIsOpen && (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 12 }}>
+                <svg className="w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="none">
+                  <rect
+                    x="10"
+                    y="10"
+                    width="380"
+                    height="280"
+                    rx="6"
+                    ry="6"
+                    fill="none"
+                    stroke={lineColor}
+                    strokeWidth="6"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M10 10 L200 150 L390 10"
+                    stroke={lineColor}
+                    strokeWidth="6"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M10 290 L200 150 L390 290"
+                    stroke={lineColor}
+                    strokeWidth="6"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
             )}
 
             {/* ─────────────────────────────────────────────────────────────── */}
@@ -835,4 +890,3 @@ export default function Envelope3D({
 // ────────────────────────────────────────────────────────────────────────────────
 
 export { SealIcon, type SealDesign, type OpenStyle };
-
