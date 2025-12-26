@@ -7,7 +7,6 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { FontFamily } from '@tiptap/extension-font-family';
 import { Extension } from '@tiptap/core';
 import { 
   Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight,
@@ -174,6 +173,70 @@ const FontSize = Extension.create({
   },
 });
 
+
+// FontFamily Extension (Stable, no DOM mutations)
+// - Persist font-family via TipTap schema (TextStyle mark)
+// - Also add `data-font-family` + `--tiptap-font-family` so CSS can safely override with !important
+const FontFamilyStable = Extension.create({
+  name: 'fontFamily',
+
+  addOptions() {
+    return {
+      types: ['textStyle'],
+    };
+  },
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontFamily: {
+            default: null,
+            parseHTML: (element) => {
+              // Prefer computed style, but keep fallback list when possible
+              const styleAttr = element.getAttribute('style') || '';
+              const match = styleAttr.match(/font-family:\s*([^;]+)/i);
+              if (match?.[1]) return match[1].trim();
+              const computed = (element as HTMLElement).style?.fontFamily;
+              return computed || null;
+            },
+            renderHTML: (attributes) => {
+              if (!attributes.fontFamily) return {};
+              const fontFamily = String(attributes.fontFamily).trim();
+
+              // Note: TipTap will merge multiple `style:` strings from other extensions (color/fontSize...)
+              return {
+                'data-font-family': 'true',
+                style: `font-family: ${fontFamily}; --tiptap-font-family: ${fontFamily};`,
+              };
+            },
+          },
+        },
+      },
+    ];
+  },
+
+  addCommands() {
+    return {
+      setFontFamily:
+        (fontFamily: string) =>
+        ({ chain }: any) => {
+          return chain().setMark('textStyle', { fontFamily }).run();
+        },
+
+      unsetFontFamily:
+        () =>
+        ({ chain }: any) => {
+          return chain()
+            .setMark('textStyle', { fontFamily: null })
+            .removeEmptyTextStyle()
+            .run();
+        },
+    };
+  },
+});
+
 // ✅ Giữ lại TextStyle (đặc biệt là font-family/font-size/color) khi xuống dòng.
 // Nếu không, ProseMirror thường sẽ reset textStyle sau khi split paragraph,
 // dẫn tới "dòng mới bị mất font".
@@ -297,6 +360,7 @@ function FontItem({
     <button
       ref={itemRef}
       type="button"
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onSelect}
       onMouseEnter={() => {
         // ✅ Load font khi hover (backup nếu IntersectionObserver chưa trigger)
@@ -397,7 +461,18 @@ export default function RichTextEditor({
   const bgMenuRef = useRef<HTMLDivElement>(null);
 
   // ✅ Lưu selection cuối cùng để khi click toolbar/dropdown không bị mất vùng chọn.
-  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null)
+  // ✅ Keep latest `content` prop for callbacks to avoid stale closures
+  const contentRef = useRef<string>(content || '');
+
+  useEffect(() => {
+    contentRef.current = content || '';
+  }, [content]);
+
+  // ✅ Track last local editor update to prevent "controlled echo" from resetting content
+  const lastEmittedHtmlRef = useRef<string>(content || '');
+  const lastEmittedAtRef = useRef<number>(0);
+;
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -411,16 +486,18 @@ export default function RichTextEditor({
       Underline,
       TextStyle,
       Color,
-      FontFamily.configure({
-        types: ['textStyle'],
-      }),
+      FontFamilyStable,
       FontSize,
       PreserveTextStyleOnEnter,
     ],
     content: content || '',
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
-      if (html !== content) {
+      lastEmittedHtmlRef.current = html;
+      lastEmittedAtRef.current = Date.now();
+
+      // Only notify parent when it's not already in sync
+      if (html !== contentRef.current) {
         onChange(html);
       }
     },
@@ -450,62 +527,44 @@ export default function RichTextEditor({
     };
   }, [editor]);
 
-  // Update editor content when prop changes
-  const isUpdatingRef = useRef(false);
-  const lastContentRef = useRef<string>(content || '');
-  const lastRecipientNameRef = useRef<string>(recipientName || '');
-  const lastSenderNameRef = useRef<string>(senderName || '');
-  
+  // Sync editor content from parent ONLY when the parent truly changes it (page switch, load, etc.)
+  // Avoid calling setContent for the editor's own updates (prevents selection loss + style resets).
+  const normalizeForSync = useCallback((html: string) => {
+    return (html || '')
+      // Remove recipient header if present
+      .replace(/^<p>Gửi\s+<span[^>]*>.*?<\/span>,?<\/p>(<p><br><\/p>)+/i, '')
+      .replace(/^<p>Gửi\s+<span[^>]*>.*?<\/span>,?<\/p>/i, '')
+      // Remove sender footer if present
+      .replace(/<p><br><\/p><p[^>]*style="text-align:\s*right[^"]*"[^>]*>Yêu thương,[\s\S]*?<\/p>\s*$/i, '')
+      .trim();
+  }, []);
+
   useEffect(() => {
-    if (isUpdatingRef.current) {
-      isUpdatingRef.current = false;
-      return;
+    if (!editor) return;
+
+    const incoming = content || '';
+    const current = editor.getHTML();
+
+    if (incoming === current) return;
+
+    const incomingNorm = normalizeForSync(incoming);
+    const currentNorm = normalizeForSync(current);
+
+    // If only header/footer/normalization differs, don't reset editor
+    if (incomingNorm === currentNorm) return;
+
+    // If this change is just an "echo" of what the editor emitted very recently, ignore
+    const recentlyEmitted = Date.now() - lastEmittedAtRef.current < 500;
+    if (recentlyEmitted) {
+      const emittedNorm = normalizeForSync(lastEmittedHtmlRef.current);
+      if (incomingNorm === emittedNorm) return;
     }
-    
-    if (editor) {
-      const currentEditorContent = editor.getHTML();
-      const recipientNameChanged = (recipientName || '') !== lastRecipientNameRef.current;
-      const senderNameChanged = (senderName || '') !== lastSenderNameRef.current;
-      
-      const stripHeaderFooter = (html: string) => {
-        return html
-          .replace(/^<p>Gửi\s+<span[^>]*>.*?<\/span>,?<\/p>(<p><br><\/p>)?/gi, '')
-          .replace(/<p><br><\/p><p[^>]*style="text-align:\s*right[^"]*"[^>]*>Yêu thương,[\s\S]*?<\/p>$/i, '')
-          .trim();
-      };
-      
-      const strippedNew = stripHeaderFooter(content || '');
-      const strippedCurrent = stripHeaderFooter(currentEditorContent);
-      
-      if (strippedNew !== strippedCurrent || recipientNameChanged || senderNameChanged) {
-        isUpdatingRef.current = true;
-        editor.commands.setContent(content || '');
-        lastContentRef.current = content || '';
-        lastRecipientNameRef.current = recipientName || '';
-        lastSenderNameRef.current = senderName || '';
-        
-        // ✅ Apply CSS variables for font-family after setContent
-        // This ensures font-family is preserved when content is loaded
-        setTimeout(() => {
-          const view = editor.view;
-          const viewport = view.dom;
-          const spansWithFont = viewport.querySelectorAll('span[style*="font-family"]');
-          
-          spansWithFont.forEach((span) => {
-            const htmlElement = span as HTMLElement;
-            const styleAttr = htmlElement.getAttribute('style') || '';
-            const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-            
-            if (fontMatch) {
-              const extractedFont = fontMatch[1].trim().replace(/['"]/g, '');
-              htmlElement.setAttribute('data-font-family', 'true');
-              htmlElement.style.setProperty('--tiptap-font-family', extractedFont);
-            }
-          });
-        }, 50);
-      }
-    }
-  }, [content, editor, recipientName, senderName]);
+
+    // External update: replace document without emitting another onUpdate
+    editor.commands.setContent(incoming, { emitUpdate: false });
+  }, [content, editor, normalizeForSync]);
+
+
 
   // ✅ Expose getContent function to parent via callback (với usedFonts)
   useEffect(() => {
@@ -567,56 +626,6 @@ export default function RichTextEditor({
       setUsedFonts(prev => new Set([...prev, ...foundFontIds]));
     }
   }, [content, editor]);
-
-  // Apply CSS variable for font-family on initial load and when content changes
-  useEffect(() => {
-    if (!editor) return;
-    
-    // Apply immediately and once more after a short delay to catch late DOM updates
-    const applyFontVariables = () => {
-      const view = editor.view;
-      const viewport = view.dom;
-      const spansWithFont = viewport.querySelectorAll('span[style*="font-family"]');
-      
-      spansWithFont.forEach((span) => {
-        const htmlElement = span as HTMLElement;
-        const styleAttr = htmlElement.getAttribute('style') || '';
-        const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-        
-        if (fontMatch) {
-          const fontValue = fontMatch[1].trim();
-          htmlElement.setAttribute('data-font-family', 'true');
-          htmlElement.style.setProperty('--tiptap-font-family', fontValue);
-        }
-      });
-    };
-    
-    applyFontVariables();
-    // Apply multiple times to catch late DOM updates
-    const timeout1 = setTimeout(applyFontVariables, 50);
-    const timeout2 = setTimeout(applyFontVariables, 150);
-    const timeout3 = setTimeout(applyFontVariables, 300);
-    
-    const handleSelectionUpdate = () => {
-      setTimeout(applyFontVariables, 0);
-    };
-    
-    // ✅ Also apply on transaction (content changes)
-    const handleTransaction = () => {
-      setTimeout(applyFontVariables, 10);
-    };
-    
-    editor.on('selectionUpdate', handleSelectionUpdate);
-    editor.on('transaction', handleTransaction);
-    
-    return () => {
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
-      clearTimeout(timeout3);
-      editor.off('selectionUpdate', handleSelectionUpdate);
-      editor.off('transaction', handleTransaction);
-    };
-  }, [editor, content]);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -696,31 +705,9 @@ export default function RichTextEditor({
         }
       }
     }
-    
-    // ✅ Apply font với delay nhỏ để đảm bảo font đã load
-    setTimeout(() => {
-      chainWithSelection().setFontFamily(fontValue).run();
-      
-      // Apply CSS variables after DOM update
-      setTimeout(() => {
-        const view = editor.view;
-        const viewport = view.dom;
-        const spansWithFont = viewport.querySelectorAll('span[style*="font-family"]');
-        
-        spansWithFont.forEach((span) => {
-          const htmlElement = span as HTMLElement;
-          const styleAttr = htmlElement.getAttribute('style') || '';
-          const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-          
-          if (fontMatch) {
-            const extractedFont = fontMatch[1].trim();
-            htmlElement.setAttribute('data-font-family', 'true');
-            htmlElement.style.setProperty('--tiptap-font-family', extractedFont);
-          }
-        });
-      }, 0);
-    }, fontId ? 100 : 0); // Delay nếu cần load font mới
-    
+    // ✅ Apply mark ngay lập tức. Font sẽ tự render ngay khi load xong.
+    chainWithSelection().setFontFamily(fontValue).run();
+
     setShowFontMenu(false);
   };
 
@@ -812,7 +799,12 @@ export default function RichTextEditor({
 
       {/* Toolbar */}
       {showToolbar && (
-        <div className={`flex items-center gap-2 p-3 bg-cream-light border border-gold/20 ${(onRecipientNameChange || onSenderNameChange) ? 'border-t-0' : 'rounded-t-xl'} flex-wrap shrink-0`}>
+        <div className={`flex items-center gap-2 p-3 bg-cream-light border border-gold/20 ${(onRecipientNameChange || onSenderNameChange) ? 'border-t-0' : 'rounded-t-xl'} flex-wrap shrink-0`}
+          onMouseDownCapture={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('button')) e.preventDefault();
+          }}
+        >
         {/* Bold */}
         <button
           type="button"

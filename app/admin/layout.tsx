@@ -54,9 +54,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen flex flex-col bg-cream">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-cream-light/80 backdrop-blur-xl border-b border-gold/20 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+      <div className="lg:hidden bg-cream-light/80 backdrop-blur-xl border-b border-gold/20 px-4 py-3 flex items-center justify-between sticky top-0 z-50 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-burgundy to-burgundy-dark rounded-lg flex items-center justify-center">
             <Heart className="w-4 h-4 text-cream" fill="currentColor" />
@@ -71,10 +71,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
       </div>
 
-      <div className="flex">
+      <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         <aside className={`
-          fixed inset-y-0 left-0 z-50 w-72 bg-cream-light border-r border-gold/20 shadow-vintage transform transition-transform lg:translate-x-0 lg:static lg:inset-auto
+          fixed inset-y-0 left-0 z-50 w-72 bg-cream-light border-r border-gold/20 shadow-vintage transform transition-transform lg:translate-x-0 lg:static lg:inset-auto shrink-0
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <div className="h-full flex flex-col">
@@ -182,12 +182,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className="flex-1 min-h-screen lg:p-8 p-4 overflow-x-hidden">
+        <main className="flex-1 min-h-0 lg:p-8 p-4 overflow-x-hidden overflow-y-auto">
           {/* Background decorations */}
           <div className="fixed top-20 right-10 text-6xl text-gold/5 font-serif pointer-events-none select-none">❧</div>
           <div className="fixed bottom-20 left-10 text-6xl text-gold/5 font-serif pointer-events-none select-none rotate-180">❧</div>
           
-          {children}
+          <div className="page">
+            {children}
+          </div>
         </main>
       </div>
     </div>

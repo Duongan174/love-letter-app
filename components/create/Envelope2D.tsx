@@ -425,10 +425,11 @@ export default function Envelope2D({
                   }}
                 >
                   <div className="w-20 h-20 rounded-full border-2 border-gray-700 flex items-center justify-center">
-                    <div className="text-[6px] text-gray-700 text-center leading-tight font-mono">
-                      <div>VIỆT NAM</div>
-                      <div>POST</div>
-                      <div>2025</div>
+                    <div className="text-[5px] text-gray-700 text-center leading-tight font-serif font-semibold px-1">
+                      <div className="uppercase tracking-tight">Fragile:</div>
+                      <div className="text-[4px] mt-0.5">Handle</div>
+                      <div className="text-[4px]">With</div>
+                      <div className="text-[4px]">Love</div>
                     </div>
                   </div>
                 </div>

@@ -75,6 +75,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       // ✅ Step 3: Letter background/pattern
       'letter_background',
       'letter_pattern',
+      'letter_container_background', // ✅ Nền container bên ngoài trang giấy
       // ✅ Step 2: Background colors cho các phần khác
       'cover_background',
       'cover_pattern',
@@ -119,15 +120,20 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       .select('*')
       .maybeSingle();
     
-    // ✅ Nếu lỗi do column không tồn tại, thử lại không có used_fonts
-    if (error && error.message?.includes('used_fonts')) {
-      const patchWithoutUsedFonts = { ...patch };
-      delete patchWithoutUsedFonts.used_fonts;
+    // ✅ Nếu lỗi do column không tồn tại, thử lại không có used_fonts hoặc letter_container_background
+    if (error && (error.message?.includes('used_fonts') || error.message?.includes('letter_container_background'))) {
+      const patchWithoutMissingColumn = { ...patch };
+      if (error.message?.includes('used_fonts')) {
+        delete patchWithoutMissingColumn.used_fonts;
+      }
+      if (error.message?.includes('letter_container_background')) {
+        delete patchWithoutMissingColumn.letter_container_background;
+      }
       
-      if (Object.keys(patchWithoutUsedFonts).length > 0) {
+      if (Object.keys(patchWithoutMissingColumn).length > 0) {
         const { data: retryData, error: retryError } = await supabase
           .from('card_drafts')
-          .update(patchWithoutUsedFonts)
+          .update(patchWithoutMissingColumn)
           .eq('id', id)
           .eq('user_id', user.id)
           .select('*')

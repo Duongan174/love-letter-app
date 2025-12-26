@@ -223,6 +223,7 @@ function CreatePage() {
               // ✅ Step 3: Load letter background/pattern from draft
               letterBackground: d.letter_background || '#ffffff',
               letterPattern: d.letter_pattern || 'solid',
+              letterContainerBackground: d.letter_container_background || 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
               // ✅ Step 2: Load background colors từ draft
               coverBackground: d.cover_background || '#fdf2f8',
               coverPattern: d.cover_pattern || 'solid',
@@ -338,6 +339,7 @@ const autosaveKey = useMemo(() => {
     // ✅ Step 3: Letter background/pattern cho trang xem thiệp
     letter_background: state.letterBackground ?? '#ffffff',
     letter_pattern: state.letterPattern ?? 'solid',
+    letter_container_background: state.letterContainerBackground ?? 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
     // ✅ Step 2: Background colors cho các phần khác
     cover_background: state.coverBackground ?? '#fdf2f8',
     cover_pattern: state.coverPattern ?? 'solid',
@@ -679,6 +681,9 @@ useEffect(() => {
                 photoPattern={state.photoPattern}
                 signatureBackground={state.signatureBackground}
                 signaturePattern={state.signaturePattern}
+                letterBackground={state.letterBackground}
+                letterPattern={state.letterPattern}
+                letterContainerBackground={state.letterContainerBackground}
                 onUpdateBackgrounds={(data) => {
                   updateMessage(data);
                 }}
@@ -696,6 +701,7 @@ useEffect(() => {
                 textEffect={state.textEffect}
                   letterBackground={state.letterBackground}
                   letterPattern={state.letterPattern}
+                  letterContainerBackground={state.letterContainerBackground}
                   stickers={state.stickers}
                   signatureData={state.signatureData}
                   userTym={user?.points || 0}

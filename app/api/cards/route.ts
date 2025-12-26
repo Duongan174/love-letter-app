@@ -108,6 +108,7 @@ export async function POST(request: Request) {
       // ✅ Step 3: Letter background/pattern cho trang xem thiệp
       letter_background: draft.letter_background || '#ffffff',
       letter_pattern: draft.letter_pattern || 'solid',
+      letter_container_background: draft.letter_container_background || 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
       // ✅ Step 2: Background colors cho các phần khác
       cover_background: draft.cover_background || '#fdf2f8',
       cover_pattern: draft.cover_pattern || 'solid',

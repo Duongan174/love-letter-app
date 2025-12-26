@@ -121,16 +121,34 @@ export default function Step1Envelope({
     points_required: 0,
   };
   
-  // Preset color combinations (dựa trên hình ảnh)
+  // ✅ Bộ màu gợi ý 2025 - Đa dạng và phù hợp với phong bì vintage/elegant
+  // Dựa trên xu hướng màu sắc năm 2025: Peach Fuzz (Pantone), Tranquil Blue, Sage Green, Warm Terracotta, etc.
   const COLOR_PRESETS = [
-    { name: 'Olive Green', base: '#6b7c3f', pattern: '#4a5a2a', intensity: 0.2 },
-    { name: 'Deep Purple', base: '#6a1b9a', pattern: '#4a148c', intensity: 0.18 },
-    { name: 'Soft Pink', base: '#f8bbd0', pattern: '#f48fb1', intensity: 0.25 },
-    { name: 'Vibrant Teal', base: '#00897b', pattern: '#00695c', intensity: 0.22 },
-    { name: 'Light Blue', base: '#90caf9', pattern: '#64b5f6', intensity: 0.2 },
-    { name: 'Warm Beige', base: '#d7ccc8', pattern: '#bcaaa4', intensity: 0.15 },
-    { name: 'Mint Green', base: '#a5d6a7', pattern: '#81c784', intensity: 0.18 },
-    { name: 'Cream White', base: '#fff8e1', pattern: '#ffecb3', intensity: 0.12 },
+    // === Màu trending 2025 ===
+    { name: 'Peach Fuzz', base: '#FFB59E', pattern: '#E89A80', intensity: 0.18 }, // Pantone Color of the Year 2025
+    { name: 'Tranquil Blue', base: '#7FB3D3', pattern: '#5A9BC4', intensity: 0.2 }, // Calm & Serene
+    { name: 'Sage Green', base: '#9CAF88', pattern: '#7A9A6A', intensity: 0.22 }, // Natural & Fresh
+    { name: 'Warm Terracotta', base: '#C97D60', pattern: '#A85D45', intensity: 0.2 }, // Earthy & Warm
+    { name: 'Soft Lavender', base: '#B8A9C9', pattern: '#9B8BAF', intensity: 0.18 }, // Elegant & Dreamy
+    { name: 'Butter Yellow', base: '#F5D76E', pattern: '#E8C85A', intensity: 0.15 }, // Cheerful & Bright
+    { name: 'Dusty Rose', base: '#D4A5A5', pattern: '#B88A8A', intensity: 0.2 }, // Romantic & Vintage
+    { name: 'Muted Teal', base: '#6B9A8A', pattern: '#4F7A6B', intensity: 0.22 }, // Sophisticated
+    
+    // === Màu cổ điển cho phong bì ===
+    { name: 'Creamy Beige', base: '#E8DCC6', pattern: '#D4C4A8', intensity: 0.12 }, // Classic Vintage
+    { name: 'Blush Pink', base: '#E8B4B8', pattern: '#D49AA0', intensity: 0.2 }, // Soft & Feminine
+    { name: 'Warm Taupe', base: '#A08B7A', pattern: '#7A6A5A', intensity: 0.18 }, // Timeless Elegance
+    { name: 'Soft Mint', base: '#A8D5BA', pattern: '#8BC4A0', intensity: 0.18 }, // Fresh & Light
+    { name: 'Vintage Coral', base: '#E89A80', pattern: '#D47A60', intensity: 0.2 }, // Warm & Inviting
+    { name: 'Periwinkle', base: '#9B9FD4', pattern: '#7A7FB8', intensity: 0.18 }, // Dreamy & Calm
+    { name: 'Warm Gray', base: '#8B8680', pattern: '#6B6660', intensity: 0.15 }, // Sophisticated Neutral
+    { name: 'Pale Gold', base: '#F4E4BC', pattern: '#E8D4A0', intensity: 0.12 }, // Luxurious & Warm
+    
+    // === Màu bổ sung đa dạng ===
+    { name: 'Dusty Blue', base: '#8FA8B8', pattern: '#6B8494', intensity: 0.2 }, // Serene & Calm
+    { name: 'Mauve', base: '#C4A5C4', pattern: '#A885A8', intensity: 0.18 }, // Elegant Purple
+    { name: 'Sage Blue', base: '#7A9A9A', pattern: '#5A7A7A', intensity: 0.2 }, // Tranquil & Peaceful
+    { name: 'Apricot', base: '#FFC8A3', pattern: '#E8A880', intensity: 0.18 }, // Warm & Friendly
   ];
   
   // Update base color when envelope changes - chỉ khi giá trị thực sự khác
@@ -229,7 +247,7 @@ export default function Step1Envelope({
               <span className="w-1 h-4 bg-gradient-to-b from-amber-400 to-amber-600 rounded-full"></span>
               Bộ màu gợi ý
             </p>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-2.5">
               {COLOR_PRESETS.map((preset, idx) => (
                 <motion.button
                   key={idx}

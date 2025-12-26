@@ -35,6 +35,7 @@ export interface CreateCardState {
   textEffect: string;
   letterBackground: string;
   letterPattern: string;
+  letterContainerBackground: string; // ✅ Nền container bên ngoài trang giấy
   // ✅ Background colors cho các phần khác
   coverBackground: string;
   coverPattern: string;
@@ -105,6 +106,7 @@ function useCreateCard() {
     textEffect: 'none',
     letterBackground: '#ffffff',
     letterPattern: 'solid',
+    letterContainerBackground: 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))', // ✅ Gradient mặc định
     // ✅ Background colors mặc định cho các phần
     coverBackground: '#fdf2f8',
     coverPattern: 'solid',
@@ -238,11 +240,15 @@ function useCreateCard() {
       return;
     }
     // ✅ Nếu có richContent, cũng cập nhật letterPages từ richContent
+    // ✅ QUAN TRỌNG: Giữ nguyên letterBackground và letterPattern nếu không được cung cấp
     if (data && data.richContent) {
       const pages = splitLetterPages(data.richContent);
       setState(prev => ({ 
         ...prev, 
         ...data,
+        // ✅ Giữ nguyên background và pattern nếu không được cung cấp trong data
+        letterBackground: data.letterBackground !== undefined ? data.letterBackground : prev.letterBackground,
+        letterPattern: data.letterPattern !== undefined ? data.letterPattern : prev.letterPattern,
         letterPages: pages.length ? pages : prev.letterPages || [''],
       }));
       return;
@@ -255,11 +261,21 @@ function useCreateCard() {
         newState.photoSlots = Array.isArray(data.photoSlots) ? data.photoSlots : [];
       }
       // ✅ Step 3: Letter background/pattern từ draft load
-      if ('letterBackground' in data && data.letterBackground) {
-        newState.letterBackground = data.letterBackground;
+      // ✅ QUAN TRỌNG: Chỉ update nếu có giá trị hợp lệ, không thì giữ nguyên giá trị cũ
+      if ('letterBackground' in data) {
+        newState.letterBackground = (data.letterBackground !== undefined && data.letterBackground !== null && data.letterBackground !== '') 
+          ? data.letterBackground 
+          : prev.letterBackground;
       }
-      if ('letterPattern' in data && data.letterPattern) {
-        newState.letterPattern = data.letterPattern;
+      if ('letterPattern' in data) {
+        newState.letterPattern = (data.letterPattern !== undefined && data.letterPattern !== null && data.letterPattern !== '') 
+          ? data.letterPattern 
+          : prev.letterPattern;
+      }
+      if ('letterContainerBackground' in data) {
+        newState.letterContainerBackground = (data.letterContainerBackground !== undefined && data.letterContainerBackground !== null && data.letterContainerBackground !== '') 
+          ? data.letterContainerBackground 
+          : prev.letterContainerBackground;
       }
       // ✅ Chỉ update usedFonts nếu thực sự khác (tránh vòng lặp)
       if ('usedFonts' in data) {

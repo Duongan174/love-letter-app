@@ -27,6 +27,7 @@ export type AppUser = {
 
 type AuthCtx = {
   user: AppUser | null;
+  /** Only for initial bootstrapping. Not toggled for TOKEN_REFRESHED. */
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
@@ -37,7 +38,6 @@ type AuthCtx = {
 const AuthContext = createContext<AuthCtx | null>(null);
 
 function normalizeUnknownError(err: unknown) {
-  // ✅ Log ra được message/stack thay vì {}
   if (err instanceof Error) {
     return { name: err.name, message: err.message, stack: err.stack };
   }
@@ -93,7 +93,6 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
   }
 
   if (!data) {
-    // ✅ chưa có row user -> tạo tối thiểu
     const meta: any = sbUser.user_metadata ?? {};
     const appMeta: any = sbUser.app_metadata ?? {};
 
@@ -143,7 +142,7 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
 
 /**
  * ✅ Lấy user có timeout nhưng KHÔNG throw.
- * Nếu timeout / network fail → trả { user: null } để app không kẹt.
+ * NOTE: background tabs can throttle timers; we only use this for initial / manual refresh.
  */
 async function getUserSafe(
   supabase: ReturnType<typeof supabaseBrowser>,
@@ -153,11 +152,9 @@ async function getUserSafe(
 
   try {
     const timeoutPromise = new Promise<{ kind: 'timeout' }>((resolve) => {
-      timer = window.setTimeout(() => {
-        resolve({ kind: 'timeout' as const });
-      }, timeoutMs);
+      timer = window.setTimeout(() => resolve({ kind: 'timeout' as const }), timeoutMs);
     });
-    
+
     const res = await Promise.race([
       supabase.auth.getUser().then((r) => ({ kind: 'ok' as const, r })),
       timeoutPromise,
@@ -181,6 +178,14 @@ async function getUserSafe(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [user, setUser] = useState<AppUser | null>(null);
+
+  // ✅ Keep latest user presence without re-subscribing auth listener
+  const hasUserRef = useRef(false);
+  useEffect(() => {
+    hasUserRef.current = !!user;
+  }, [user]);
+
+  // ✅ Only for initial boot. Not toggled for TOKEN_REFRESHED/USER_UPDATED.
   const [loading, setLoading] = useState(true);
 
   const aliveRef = useRef(true);
@@ -191,36 +196,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const applyProfileFromSbUser = useCallback(async (sbUser: SbUser) => {
+    try {
+      const prof = await fetchProfile(sbUser);
+      if (aliveRef.current) {
+        // ✅ FIX 3 — Tránh re-render layout vì auth change nhỏ
+        // Chỉ update nếu user thực sự thay đổi (so sánh id và các field quan trọng)
+        setUser(prev => {
+          if (prev?.id === prof.id && 
+              prev?.email === prof.email && 
+              prev?.name === prof.name && 
+              prev?.avatar === prof.avatar &&
+              prev?.points === prof.points &&
+              prev?.role === prof.role) {
+            return prev; // Giữ nguyên reference để tránh re-render
+          }
+          return prof;
+        });
+      }
+    } catch (err) {
+      console.warn('fetchProfile unexpected warn:', normalizeUnknownError(err));
+      if (aliveRef.current) {
+        const fallbackUser = buildFallbackUser(sbUser);
+        setUser(prev => {
+          if (prev?.id === fallbackUser.id && 
+              prev?.email === fallbackUser.email && 
+              prev?.name === fallbackUser.name && 
+              prev?.avatar === fallbackUser.avatar &&
+              prev?.points === fallbackUser.points &&
+              prev?.role === fallbackUser.role) {
+            return prev;
+          }
+          return fallbackUser;
+        });
+      }
+    }
+  }, []);
+
   const refreshProfile = useCallback(async () => {
     const { user: sbUser, timedOut, error } = await getUserSafe(supabase, 12000);
 
     if (error) {
-      // ✅ Không còn console.error {} gây khó chịu nữa
-      // Chỉ warn để debug, app vẫn chạy và không kẹt
       console.warn('refreshProfile warn:', { timedOut, ...normalizeUnknownError(error) });
     }
 
-    // ⚠️ CRITICAL: Nếu timeout, không set user = null (giữ nguyên user hiện tại)
-    // Chỉ set null nếu thực sự không có user (không phải timeout)
+    // If timeout, keep current user to avoid UI flicker / false logout.
     if (!sbUser) {
-      // Chỉ set null nếu không phải timeout (có thể là thực sự đã logout)
-      // Nếu timeout, giữ nguyên user hiện tại để không bị đăng xuất
-      if (!timedOut && aliveRef.current) {
-        setUser(null);
-      }
+      if (!timedOut && aliveRef.current) setUser(null);
       return;
     }
 
-    try {
-      const prof = await fetchProfile(sbUser);
-      if (aliveRef.current) setUser(prof);
-    } catch (err) {
-      console.warn('fetchProfile unexpected warn:', normalizeUnknownError(err));
-      if (aliveRef.current) setUser(buildFallbackUser(sbUser));
-    }
-  }, [supabase]);
+    await applyProfileFromSbUser(sbUser);
+  }, [applyProfileFromSbUser, supabase]);
 
   useEffect(() => {
+    // Initial bootstrap
     (async () => {
       try {
         await refreshProfile();
@@ -229,25 +259,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+    // Auth events (fast path): use session.user directly to avoid hanging getUser() when tab switches.
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (event === 'SIGNED_OUT') {
           if (aliveRef.current) setUser(null);
           return;
         }
 
-        if (aliveRef.current) setLoading(true);
-        await refreshProfile();
+        const sbUser = session?.user ?? null;
+
+        // ✅ Don't show full-screen loading for token refreshes (prevents admin stuck spinner).
+        const shouldShowLoading = event === 'SIGNED_IN' && !hasUserRef.current;
+
+        if (shouldShowLoading && aliveRef.current) setLoading(true);
+
+        if (sbUser) {
+          await applyProfileFromSbUser(sbUser);
+        } else {
+          // rare fallback
+          await refreshProfile();
+        }
       } catch (err) {
         console.warn('onAuthStateChange warn:', normalizeUnknownError(err));
-        if (aliveRef.current) setUser(null);
+        // Don't force logout on transient refresh issues
       } finally {
         if (aliveRef.current) setLoading(false);
       }
     });
 
     return () => sub.subscription.unsubscribe();
-  }, [refreshProfile, supabase]);
+    // Intentionally not depending on `user` to avoid resubscribe loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyProfileFromSbUser, refreshProfile, supabase]);
 
   const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({

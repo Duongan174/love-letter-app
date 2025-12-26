@@ -22,6 +22,7 @@ interface Step3MessageProps {
   textEffect: string;
   letterBackground?: string;
   letterPattern?: string;
+  letterContainerBackground?: string; // ✅ Nền container bên ngoài trang giấy
   stickers?: Array<{ id: string; x: number; y: number; width?: number; height?: number; sticker_id: string; image_url: string }>;
   signatureData?: string | null;
   userTym?: number;
@@ -35,6 +36,7 @@ interface Step3MessageProps {
     textEffect?: string;
     letterBackground?: string;
     letterPattern?: string;
+    letterContainerBackground?: string; // ✅ Nền container bên ngoài trang giấy
     stickers?: Array<{ id: string; x: number; y: number; width?: number; height?: number; sticker_id: string; image_url: string }>;
   }) => void;
 }
@@ -282,6 +284,7 @@ export default function Step3Message({
   textEffect,
   letterBackground = '#ffffff',
   letterPattern = 'solid',
+  letterContainerBackground = 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
   stickers = [],
   signatureData = null,
   userTym = 0,
@@ -322,8 +325,8 @@ export default function Step3Message({
 
   // Ref to store current editor content before page change
   const editorContentRef = useRef<string>('');
-  // ✅ Ref to get HTML directly from editor instance
-  const getEditorContentRef = useRef<(() => string) | null>(null);
+  // ✅ Ref to get HTML directly from editor instance (returns { html, usedFonts })
+  const getEditorContentRef = useRef<(() => { html: string; usedFonts?: any[] }) | null>(null);
   // Track if we're currently switching pages to prevent saving during switch
   const isSwitchingPageRef = useRef(false);
   
@@ -363,8 +366,18 @@ export default function Step3Message({
 
   // Extract raw content from display content (remove headers/footers)
   // Always extract to ensure we store clean content without headers/footers
-  const extractRawContent = useCallback((html: string, pageIndex: number) => {
-    let raw = html || '';
+  const extractRawContent = useCallback((html: string | { html: string; usedFonts?: any[] } | null | undefined, pageIndex: number) => {
+    // ✅ Handle case where html might be an object with { html, usedFonts }
+    let htmlString: string;
+    if (typeof html === 'string') {
+      htmlString = html;
+    } else if (html && typeof html === 'object' && 'html' in html) {
+      htmlString = html.html;
+    } else {
+      htmlString = '';
+    }
+    
+    let raw = htmlString || '';
     
     // Remove recipient header from first page - be more careful to preserve content
     if (pageIndex === 0 && recipientName) {
@@ -460,9 +473,13 @@ export default function Step3Message({
   const handleSavePage = useCallback(() => {
     // ✅ Get current editor content directly from editor (most up-to-date)
     // Fallback to editorContentRef if getEditorContentRef is not available
-    const currentHtml = getEditorContentRef.current 
-      ? getEditorContentRef.current() 
-      : (editorContentRef.current || displayContent);
+    let currentHtml: string;
+    if (getEditorContentRef.current) {
+      const result = getEditorContentRef.current();
+      currentHtml = typeof result === 'string' ? result : result.html;
+    } else {
+      currentHtml = editorContentRef.current || displayContent;
+    }
     // Extract raw content (remove headers/footers)
     const rawContent = extractRawContent(currentHtml, activePage);
     
@@ -496,12 +513,21 @@ export default function Step3Message({
       onUpdateLetterPages(newPages);
       
       // ✅ Cập nhật richContent (HTML từ tất cả pages)
+      // ✅ QUAN TRỌNG: Luôn giữ nguyên letterBackground và letterPattern khi lưu trang
       const fullRichContent = newPages.join(LETTER_PAGE_BREAK_TOKEN);
-      onUpdate({ richContent: fullRichContent });
+      onUpdate({ 
+        richContent: fullRichContent,
+        letterBackground: letterBackground || '#ffffff', // ✅ Luôn có giá trị, fallback về mặc định nếu undefined
+        letterPattern: letterPattern || 'solid', // ✅ Luôn có giá trị, fallback về mặc định nếu undefined
+      });
     } else {
-      onUpdate({ message: rawContent });
+      onUpdate({ 
+        message: rawContent,
+        letterBackground: letterBackground || '#ffffff', // ✅ Luôn có giá trị, fallback về mặc định nếu undefined
+        letterPattern: letterPattern || 'solid', // ✅ Luôn có giá trị, fallback về mặc định nếu undefined
+      });
     }
-  }, [activePage, displayContent, extractRawContent, onUpdateLetterPages, onUpdate, letterPages]);
+  }, [activePage, displayContent, extractRawContent, onUpdateLetterPages, onUpdate, letterPages, letterBackground, letterPattern]);
   
   // Handle edit page
   const handleEditPage = useCallback(() => {
@@ -735,44 +761,76 @@ export default function Step3Message({
     });
   }, [stickers, onUpdate]);
 
+  // ✅ Handle used fonts change - moved outside JSX to comply with hooks rules
+  const handleUsedFontsChange = useCallback((usedFonts: string[]) => {
+    // ✅ Lưu usedFonts vào state (chỉ khi thực sự có thay đổi)
+    onUpdate({ usedFonts });
+  }, [onUpdate]);
+
   /**
    * ✅ Enhanced pattern styles với nhiều họa tiết đẹp mắt
    * Đồng bộ với RichTextEditor và trang xem thiệp
+   * ✅ Hỗ trợ cả gradient và solid color
    */
   const getPatternStyle = (pattern: string, color: string): React.CSSProperties => {
+    // ✅ Kiểm tra nếu color là gradient
+    const isGradient = color.includes('gradient');
+    
     switch (pattern) {
       case 'lined':
         return {
           backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(0,0,0,0.08) 31px, rgba(0,0,0,0.08) 32px)`,
-          backgroundColor: color,
+          ...(isGradient ? { background: color } : { backgroundColor: color }),
         };
       case 'dotted':
         return {
           backgroundImage: `radial-gradient(circle, rgba(0,0,0,0.08) 1.5px, transparent 1.5px)`,
           backgroundSize: '20px 20px',
-          backgroundColor: color,
+          ...(isGradient ? { background: `${color}, radial-gradient(circle, rgba(0,0,0,0.08) 1.5px, transparent 1.5px)` } : { backgroundColor: color }),
         };
       case 'floral':
+        const floralPattern = `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.05'%3E%3Cpath d='M30 30c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10-10c5.5 0 10-4.5 10-10s-4.5-10-10-10-10 4.5-10 10 4.5 10 10 10zm-10 30c5.5 0 10-4.5 10-10s-4.5-10-10-10-10 4.5-10 10 4.5 10 10 10zm30-10c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
+        if (isGradient) {
+          return { background: `${floralPattern}, ${color}` };
+        }
         return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.05'%3E%3Cpath d='M30 30c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10-10c5.5 0 10-4.5 10-10s-4.5-10-10-10-10 4.5-10 10 4.5 10 10 10zm-10 30c5.5 0 10-4.5 10-10s-4.5-10-10-10-10 4.5-10 10 4.5 10 10 10zm30-10c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          backgroundImage: floralPattern,
           backgroundColor: color,
         };
       case 'vintage':
+        const vintagePattern = `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M0 0h40v40H0V0zm40 40h40v40H40V40z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
+        if (isGradient) {
+          return { background: `${vintagePattern}, ${color}` };
+        }
         return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M0 0h40v40H0V0zm40 40h40v40H40V40z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          backgroundImage: vintagePattern,
           backgroundColor: color,
         };
       // ✅ Họa tiết trái tim
       case 'hearts':
+        const heartsPattern = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 35l-2.5-2.3C9.5 25.2 4 20.1 4 14c0-5 3.9-9 8.6-9 2.8 0 5.4 1.3 7.4 3.5C21.9 6.3 24.5 5 27.4 5 32.1 5 36 9 36 14c0 6.1-5.5 11.2-13.5 18.7L20 35z' fill='%23FF69B4' fill-opacity='0.08'/%3E%3C/svg%3E")`;
+        if (isGradient) {
+          return {
+            background: `${heartsPattern}, ${color}`,
+            backgroundSize: '40px 40px',
+          };
+        }
         return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 35l-2.5-2.3C9.5 25.2 4 20.1 4 14c0-5 3.9-9 8.6-9 2.8 0 5.4 1.3 7.4 3.5C21.9 6.3 24.5 5 27.4 5 32.1 5 36 9 36 14c0 6.1-5.5 11.2-13.5 18.7L20 35z' fill='%23FF69B4' fill-opacity='0.08'/%3E%3C/svg%3E")`,
+          backgroundImage: heartsPattern,
           backgroundSize: '40px 40px',
           backgroundColor: color,
         };
       // ✅ Họa tiết ngôi sao
       case 'stars':
+        const starsPattern = `url("data:image/svg+xml,%3Csvg width='50' height='50' viewBox='0 0 50 50' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='25,2 32,18 50,18 36,29 41,46 25,36 9,46 14,29 0,18 18,18' fill='%23FFD700' fill-opacity='0.1'/%3E%3C/svg%3E")`;
+        if (isGradient) {
+          return {
+            background: `${starsPattern}, ${color}`,
+            backgroundSize: '50px 50px',
+          };
+        }
         return {
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='50' height='50' viewBox='0 0 50 50' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolygon points='25,2 32,18 50,18 36,29 41,46 25,36 9,46 14,29 0,18 18,18' fill='%23FFD700' fill-opacity='0.1'/%3E%3C/svg%3E")`,
+          backgroundImage: starsPattern,
           backgroundSize: '50px 50px',
           backgroundColor: color,
         };
@@ -872,6 +930,10 @@ export default function Step3Message({
           backgroundColor: color,
         };
       default:
+        // ✅ Solid pattern - hỗ trợ cả gradient và solid color
+        if (isGradient) {
+          return { background: color };
+        }
         return { backgroundColor: color };
     }
   };
@@ -940,7 +1002,16 @@ export default function Step3Message({
               </div>
 
               {/* Letter Container with Background */}
-              <div className="p-8 flex justify-center overflow-x-auto bg-gradient-to-br from-amber-50/30 to-rose-50/20">
+              <div 
+                className="p-8 flex justify-center overflow-x-auto"
+                style={{
+                  background: letterContainerBackground.includes('gradient') 
+                    ? letterContainerBackground 
+                    : letterContainerBackground.includes('#') || letterContainerBackground.includes('rgb')
+                    ? letterContainerBackground
+                    : `linear-gradient(to bottom right, ${letterContainerBackground}, ${letterContainerBackground})`,
+                }}
+              >
                 <DropZone onDrop={handleStickerDrop}>
                   <div
                     ref={letterRef}
@@ -964,11 +1035,7 @@ export default function Step3Message({
                         onBackgroundChange={(color, pattern) => {
                           onUpdate({ letterBackground: color, letterPattern: pattern });
                         }}
-                        onUsedFontsChange={useCallback((usedFonts: string[]) => {
-                          // ✅ Lưu usedFonts vào state (chỉ khi thực sự có thay đổi)
-                          // Sử dụng functional update để tránh vòng lặp
-                          onUpdate({ usedFonts });
-                        }, [onUpdate])}
+                        onUsedFontsChange={handleUsedFontsChange}
                         showToolbar={true}
                         showEditorContent={true}
                         onOpenStickerPalette={() => setShowStickerPalette(true)}
@@ -983,8 +1050,12 @@ export default function Step3Message({
                         className="flex-1 flex flex-col min-h-0"
                       />
                     ) : (
-                      <div className="flex-1 flex flex-col min-h-0 p-6 overflow-y-auto">
+                      <div 
+                        className="flex-1 flex flex-col min-h-0 p-6 overflow-y-auto"
+                        style={getPatternStyle(letterPattern, letterBackground)}
+                      >
                         {/* ✅ Use letter-content class instead of prose to preserve inline font-family */}
+                        {/* ✅ Áp dụng background style để hiển thị đúng nền trang giấy khi không editing */}
                         <SavedContentRenderer html={displayContent || '<p class="text-gray-400 italic">Chưa có nội dung. Nhấn "Chỉnh sửa" để bắt đầu viết.</p>'} />
                       </div>
                     )}

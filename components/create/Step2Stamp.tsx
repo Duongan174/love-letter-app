@@ -20,6 +20,9 @@ interface Step2StampProps {
   photoPattern?: string;
   signatureBackground?: string;
   signaturePattern?: string;
+  letterBackground?: string;
+  letterPattern?: string;
+  letterContainerBackground?: string; // ✅ Nền container bên ngoài trang giấy
   onUpdateBackgrounds?: (data: {
     coverBackground?: string;
     coverPattern?: string;
@@ -27,6 +30,9 @@ interface Step2StampProps {
     photoPattern?: string;
     signatureBackground?: string;
     signaturePattern?: string;
+    letterBackground?: string;
+    letterPattern?: string;
+    letterContainerBackground?: string; // ✅ Nền container bên ngoài trang giấy
   }) => void;
 }
 
@@ -266,7 +272,7 @@ function getPagePatternStyle(pattern: string, color: string): React.CSSPropertie
   }
 }
 
-// ✅ Background Selector Component - với Gradient Presets
+// ✅ Background Selector Component - với Gradient Presets (KHÔNG có họa tiết)
 function BackgroundSelector({
   label,
   currentColor,
@@ -281,7 +287,7 @@ function BackgroundSelector({
   onPatternChange: (pattern: string) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<'gradients' | 'colors' | 'patterns'>('gradients');
+  const [activeTab, setActiveTab] = useState<'gradients' | 'colors'>('gradients');
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -320,7 +326,7 @@ function BackgroundSelector({
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             className="absolute top-full left-0 mt-2 bg-white border border-amber-200/50 rounded-2xl shadow-2xl p-4 z-50 w-[360px]"
           >
-            {/* Tabs */}
+            {/* Tabs - Chỉ có Gradient và Đơn sắc, KHÔNG có Họa tiết */}
             <div className="flex gap-1 mb-3 bg-amber-50 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab('gradients')}
@@ -337,14 +343,6 @@ function BackgroundSelector({
                 }`}
               >
                 🎯 Đơn sắc
-              </button>
-              <button
-                onClick={() => setActiveTab('patterns')}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  activeTab === 'patterns' ? 'bg-white text-amber-700 shadow-sm' : 'text-amber-600 hover:bg-amber-100/50'
-                }`}
-              >
-                ✨ Họa tiết
               </button>
             </div>
 
@@ -397,36 +395,16 @@ function BackgroundSelector({
                     <button
                       key={color}
                       type="button"
-                      onClick={() => onColorChange(color)}
+                      onClick={() => {
+                        onColorChange(color);
+                        onPatternChange('solid'); // Tự động set pattern về 'solid' khi chọn màu đơn sắc
+                      }}
                       className={`w-9 h-9 rounded-lg border-2 transition hover:scale-110 ${
                         currentColor === color && !isGradient ? 'border-amber-500 ring-2 ring-amber-200/30 scale-110' : 'border-amber-200/20 hover:border-amber-300/50'
                       }`}
                       style={{ backgroundColor: color }}
                       title={color}
                     />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Patterns Tab */}
-            {activeTab === 'patterns' && (
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-amber-900/70">Họa tiết ({PAGE_PATTERNS.length} mẫu)</label>
-                <div className="grid grid-cols-5 gap-1.5 max-h-[280px] overflow-y-auto pr-1">
-                  {PAGE_PATTERNS.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => onPatternChange(p.id)}
-                      className={`p-2 rounded-xl border-2 transition flex flex-col items-center gap-1 hover:scale-105 ${
-                        currentPattern === p.id ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-200/30 scale-105' : 'border-amber-200/30 hover:bg-amber-50/50'
-                      }`}
-                      title={p.name}
-                    >
-                      <span className="text-xl">{p.preview}</span>
-                      <span className="text-[9px] text-amber-700/70 truncate w-full text-center font-medium">{p.name}</span>
-                    </button>
                   ))}
                 </div>
               </div>
@@ -449,6 +427,9 @@ export default function Step2Stamp({
   photoPattern = 'solid',
   signatureBackground = '#fce4ec',
   signaturePattern = 'solid',
+  letterBackground = '#ffffff',
+  letterPattern = 'solid',
+  letterContainerBackground = 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
   onUpdateBackgrounds,
 }: Step2StampProps) {
   const [stamps, setStamps] = useState<any[]>([]);
@@ -461,7 +442,7 @@ export default function Step2Stamp({
     });
   }, []);
 
-  const handleBackgroundChange = (type: 'cover' | 'photo' | 'signature', color?: string, pattern?: string) => {
+  const handleBackgroundChange = (type: 'cover' | 'photo' | 'signature' | 'letter' | 'letterContainer', color?: string, pattern?: string) => {
     if (!onUpdateBackgrounds) return;
     
     const updates: any = {};
@@ -474,6 +455,11 @@ export default function Step2Stamp({
     } else if (type === 'signature') {
       if (color !== undefined) updates.signatureBackground = color;
       if (pattern !== undefined) updates.signaturePattern = pattern;
+    } else if (type === 'letter') {
+      if (color !== undefined) updates.letterBackground = color;
+      if (pattern !== undefined) updates.letterPattern = pattern;
+    } else if (type === 'letterContainer') {
+      if (color !== undefined) updates.letterContainerBackground = color;
     }
     
     onUpdateBackgrounds(updates);
@@ -527,6 +513,20 @@ export default function Step2Stamp({
                   currentPattern={photoPattern}
                   onColorChange={(color) => handleBackgroundChange('photo', color)}
                   onPatternChange={(pattern) => handleBackgroundChange('photo', undefined, pattern)}
+                />
+                <BackgroundSelector
+                  label="Trang văn bản thư viết"
+                  currentColor={letterBackground}
+                  currentPattern={letterPattern}
+                  onColorChange={(color) => handleBackgroundChange('letter', color)}
+                  onPatternChange={(pattern) => handleBackgroundChange('letter', undefined, pattern)}
+                />
+                <BackgroundSelector
+                  label="Nền container trang giấy"
+                  currentColor={letterContainerBackground}
+                  currentPattern="solid"
+                  onColorChange={(color) => handleBackgroundChange('letterContainer', color)}
+                  onPatternChange={() => {}} // Không có pattern cho container
                 />
                 <BackgroundSelector
                   label="Trang chữ ký"
