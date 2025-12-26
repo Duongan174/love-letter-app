@@ -93,6 +93,8 @@ export async function POST(request: Request) {
 
       content: draft.content,
       rich_content: draft.rich_content || null, // ✅ Lưu rich_content vào cards
+      // ✅ Lưu fonts đã sử dụng (chỉ nếu column tồn tại)
+      ...(draft.used_fonts ? { used_fonts: draft.used_fonts } : {}),
       font_style: draft.font_style || 'font-dancing',
       text_effect: draft.text_effect || 'typewriter',
       photos: Array.isArray(draft.photos) ? draft.photos : [],

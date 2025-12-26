@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Envelope3D, { type SealDesign } from './Envelope3D';
+import Envelope2D, { type SealDesign } from './Envelope2D';
 import { Palette } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -136,13 +136,26 @@ export default function Step1Envelope({
   // Update base color when envelope changes - chỉ khi giá trị thực sự khác
   // ✅ Sử dụng useRef để track giá trị trước đó, tránh vòng lặp vô hạn
   const prevColorRef = useRef<string>('');
+  const isUpdatingFromEffectRef = useRef(false);
   
   useEffect(() => {
     const newColor = selectedEnvelope?.color || defaultEnvelopeFromDB?.color;
     // Chỉ set nếu có giá trị mới và khác với giá trị đã set trước đó
+    // Sử dụng functional update để so sánh với giá trị hiện tại mà không cần dependency
     if (newColor && newColor !== prevColorRef.current) {
-      prevColorRef.current = newColor;
-      setEnvelopeBaseColor(newColor);
+      setEnvelopeBaseColor((currentColor: string) => {
+        // Chỉ update nếu thực sự khác
+        if (newColor !== currentColor) {
+          prevColorRef.current = newColor;
+          isUpdatingFromEffectRef.current = true;
+          // Reset flag sau một tick
+          setTimeout(() => {
+            isUpdatingFromEffectRef.current = false;
+          }, 0);
+          return newColor;
+        }
+        return currentColor;
+      });
     }
   }, [selectedEnvelope?.color, defaultEnvelopeFromDB?.color]);
 
@@ -151,6 +164,11 @@ export default function Step1Envelope({
   const prevUpdateRef = useRef<string>('');
   
   useEffect(() => {
+    // Skip nếu đang update từ useEffect khác để tránh vòng lặp
+    if (isUpdatingFromEffectRef.current) {
+      return;
+    }
+    
     // Only update if we have a valid envelope (either selected or default from DB)
     if (defaultEnvelope && defaultEnvelope.id) {
       // Tạo signature để check xem có thay đổi thực sự không
@@ -165,7 +183,12 @@ export default function Step1Envelope({
       });
       
       // Chỉ gọi onSelectEnvelope nếu có thay đổi thực sự
-      if (updateSignature !== prevUpdateRef.current) {
+      // Và color trong selectedEnvelope khác với envelopeBaseColor (tránh vòng lặp)
+      const currentSelectedColor = selectedEnvelope?.color;
+      const shouldUpdate = updateSignature !== prevUpdateRef.current && 
+                          (currentSelectedColor !== envelopeBaseColor || !currentSelectedColor);
+      
+      if (shouldUpdate) {
         prevUpdateRef.current = updateSignature;
         onSelectEnvelope({
           ...defaultEnvelope,
@@ -179,7 +202,7 @@ export default function Step1Envelope({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPattern, selectedSeal, selectedSealColor, envelopeBaseColor, patternColor, patternIntensity, defaultEnvelope?.id]);
+  }, [selectedPattern, selectedSeal, selectedSealColor, envelopeBaseColor, patternColor, patternIntensity, defaultEnvelope?.id, selectedEnvelope?.color]);
 
   return (
     <div className="flex h-full gap-8 p-6">
@@ -421,7 +444,7 @@ export default function Step1Envelope({
                 <p className="text-sm text-gray-500">Nhấn vào con dấu để mở/đóng</p>
               </div>
               <div className="transform scale-125">
-                <Envelope3D
+                <Envelope2D
                   color={envelopeBaseColor}
                   pattern={selectedPattern}
                   patternColor={patternColor}
@@ -431,11 +454,10 @@ export default function Step1Envelope({
                   sealDesign={selectedSeal}
                   sealColor={selectedSealColor}
                   isOpen={isOpen}
-                  isFlipped={envelopeSide === 'back'}
+                  side={envelopeSide}
                   showControls
-                  onOpen={() => setIsOpen(true)}
-                  onClose={() => setIsOpen(false)}
-                  onFlip={() => setEnvelopeSide(s => s === 'front' ? 'back' : 'front')}
+                  onToggleOpen={() => setIsOpen((v) => !v)}
+                  onFlip={() => setEnvelopeSide((s) => (s === 'front' ? 'back' : 'front'))}
                 />
               </div>
             </motion.div>

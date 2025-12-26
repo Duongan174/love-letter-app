@@ -326,6 +326,7 @@ const autosaveKey = useMemo(() => {
     sender_name: state.senderName ?? '',
     content: state.message ?? '',
     rich_content: state.richContent ?? null, // ✅ Lưu rich_content (HTML từ TipTap)
+    used_fonts: Array.isArray(state.usedFonts) ? state.usedFonts : null, // ✅ Lưu fonts đã sử dụng
     font_style: state.fontStyle ?? 'serif',
     text_effect: state.textEffect ?? null,
     photos: Array.isArray(state.photos) ? state.photos : [], // luôn là array

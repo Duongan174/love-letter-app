@@ -3,7 +3,7 @@
 
 import { useState, useEffect, use, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Envelope3D from '@/components/create/Envelope3D';
+import Envelope2D, { type SealDesign } from '@/components/create/Envelope2D';
 import { ChevronRight, ChevronLeft, Heart, X, Sparkles, RotateCw, Volume2, VolumeX, Music, Pause, Play } from 'lucide-react';
 import Loading from '@/components/ui/Loading';
 import { supabase } from '@/lib/supabase';
@@ -16,12 +16,60 @@ import {
   getLetterPatternStyle as getPatternStyleFromPreset,
 } from '@/lib/design-presets';
 
+// ✅ Import font loader để load fonts khi xem thiệp
+import { ensureFontsLoaded } from '@/lib/font-loader';
+import { getAllFonts, type FontId } from '@/lib/font-registry';
+
 /**
  * Component to render HTML content with proper font-family support
- * Uses useEffect to apply inline styles after render to ensure fonts are displayed correctly
+ * ✅ Load fonts on-demand từ HTML và apply styles
  */
-function ContentWithFonts({ html, className, style }: { html: string; className?: string; style?: React.CSSProperties }) {
+function ContentWithFonts({ html, className, style, usedFonts }: { 
+  html: string; 
+  className?: string; 
+  style?: React.CSSProperties;
+  usedFonts?: FontId[]; // ✅ Fonts đã được lưu từ DB
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ✅ Load fonts khi component mount hoặc HTML thay đổi
+  useEffect(() => {
+    if (usedFonts && usedFonts.length > 0) {
+      // Load fonts đã được lưu từ DB
+      ensureFontsLoaded(usedFonts);
+    } else if (html) {
+      // Fallback: extract fonts từ HTML nếu không có usedFonts
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      const spansWithFont = tempDiv.querySelectorAll('span[style*="font-family"]');
+      
+      const fontIds: FontId[] = [];
+      spansWithFont.forEach((span) => {
+        const htmlElement = span as HTMLElement;
+        const styleAttr = htmlElement.getAttribute('style') || '';
+        const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+        
+        if (fontMatch) {
+          const fontValue = fontMatch[1].trim();
+          const fontName = fontValue.split("'")[1] || fontValue.split('"')[1] || fontValue.split(',')[0].trim();
+          
+          // Tìm trong registry
+          const foundFont = getAllFonts().find(f => 
+            f.googleFamily === fontName || 
+            fontValue.includes(f.googleFamily)
+          );
+          
+          if (foundFont) {
+            fontIds.push(foundFont.id);
+          }
+        }
+      });
+      
+      if (fontIds.length > 0) {
+        ensureFontsLoaded(fontIds);
+      }
+    }
+  }, [html, usedFonts]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -92,6 +140,8 @@ type ViewData = {
   photoPattern?: string;
   signatureBackground?: string;
   signaturePattern?: string;
+  // ✅ Fonts đã sử dụng trong thiệp (để load on-demand)
+  usedFonts?: FontId[];
 };
 
 export default function CardViewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -219,6 +269,8 @@ export default function CardViewPage({ params }: { params: Promise<{ id: string 
         // ✅ Step 2: Background colors cho các phần khác
         coverBackground: card.cover_background || '#fdf2f8',
         coverPattern: card.cover_pattern || 'solid',
+        // ✅ Fonts đã sử dụng (từ DB hoặc extract từ HTML)
+        usedFonts: (card.used_fonts as FontId[]) || undefined,
         photoBackground: card.photo_background || '#fff8e1',
         photoPattern: card.photo_pattern || 'solid',
         signatureBackground: card.signature_background || '#fce4ec',
@@ -291,31 +343,38 @@ export default function CardViewPage({ params }: { params: Promise<{ id: string 
         
         {/* ✅ Phong bì - đóng ban đầu, có thể mở */}
         <div className="flex flex-col items-center gap-4">
-          <div className="relative" style={{ perspective: '1200px' }}>
-            <Envelope3D
+          <div
+            className="relative"
+            style={{ perspective: '1200px' }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!isOpen) setIsOpen(true);
+                else setIsReading(true);
+              }
+            }}
+            onClick={() => {
+              if (!isOpen) setIsOpen(true);
+              else setIsReading(true);
+            }}
+          >
+            <Envelope2D
               color={data.envelope_color}
               texture={data.texture}
               stampUrl={data.stamp_url}
               isOpen={isOpen}
-              isFlipped={isFlipped}
-              onSealClick={() => {
-                if (!isOpen) {
-                  setIsOpen(true);
-                } else {
-                  setIsReading(true);
-                }
-              }}
+              side={isFlipped ? 'back' : 'front'}
               pattern={data.envelope_pattern || 'solid'}
-              patternColor={data.envelope_pattern_color}
+              patternColor={data.envelope_pattern_color ?? undefined}
               patternIntensity={data.envelope_pattern_intensity ?? 0.15}
-              sealDesign={data.envelope_seal_design || 'heart'}
+              sealDesign={(data.envelope_seal_design || 'heart') as SealDesign}
               sealColor={data.envelope_seal_color || '#c62828'}
-              onClick={() => {
-                if (!isOpen) {
-                  setIsOpen(true);
-                } else {
-                  setIsReading(true);
-                }
+              // Seal click (mặt sau) cũng phải đồng bộ behavior
+              onToggleOpen={() => {
+                if (!isOpen) setIsOpen(true);
+                else setIsReading(true);
               }}
             />
           </div>
@@ -1276,6 +1335,7 @@ function ReaderModal({
                     fontSize: '1.125rem',
                     lineHeight: '1.875rem',
                   }}
+                  usedFonts={data.usedFonts}
                 />
               ) : (
                 <div className="w-full">

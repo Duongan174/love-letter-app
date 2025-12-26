@@ -44,6 +44,7 @@ export interface CreateCardState {
   signaturePattern: string;
   stickers: Array<{ id: string; x: number; y: number; width?: number; height?: number; sticker_id: string; image_url: string }>;
   richContent: string | null;
+  usedFonts: string[]; // ✅ Fonts đã sử dụng trong thiệp
   photos: string[];
   frameId: string | null; // ✅ Backward compatibility
   photoSlots: Array<{ slotIndex: number; photoUrl: string; transform?: ImageTransform }>; // ✅ Backward compatibility
@@ -113,6 +114,7 @@ function useCreateCard() {
     signaturePattern: 'solid',
     stickers: [],
     richContent: null,
+    usedFonts: [], // ✅ Fonts đã sử dụng
     photos: [],
     frameId: null,
     photoSlots: [],
@@ -258,6 +260,20 @@ function useCreateCard() {
       }
       if ('letterPattern' in data && data.letterPattern) {
         newState.letterPattern = data.letterPattern;
+      }
+      // ✅ Chỉ update usedFonts nếu thực sự khác (tránh vòng lặp)
+      if ('usedFonts' in data) {
+        const prevUsedFonts = prev.usedFonts || [];
+        const newUsedFonts = Array.isArray(data.usedFonts) ? data.usedFonts : [];
+        // So sánh mảng (sorted) để tránh update không cần thiết
+        const prevSorted = [...prevUsedFonts].sort().join(',');
+        const newSorted = [...newUsedFonts].sort().join(',');
+        if (prevSorted === newSorted) {
+          // Không thay đổi, giữ nguyên giá trị cũ
+          newState.usedFonts = prevUsedFonts;
+        } else {
+          newState.usedFonts = newUsedFonts;
+        }
       }
       return newState;
     });

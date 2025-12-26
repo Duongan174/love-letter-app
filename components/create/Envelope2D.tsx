@@ -5,6 +5,9 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, RotateCcw, Star, Sparkles, Crown, Flower2, Mail, Lock } from 'lucide-react';
 
+// ✅ Ảnh từ DB/Supabase có thể là "bucket/path" hoặc "storage/v1/..." nên phải resolve đúng
+import { resolveImageUrl } from '@/lib/utils';
+
 // ✅ Import envelope patterns từ hệ thống mới
 import { 
   ENVELOPE_PATTERNS as NEW_ENVELOPE_PATTERNS,
@@ -151,13 +154,14 @@ export const DEMO_ENVELOPE_PROPS: Envelope2DProps = {
   side: 'back', // Mặc định là mặt sau để thấy nút mở
 };
 
-function normalizeAssetUrl(input?: string | null): string | null {
-  const raw = (input ?? '').trim();
-  if (!raw) return null;
-  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) {
-    return raw;
-  }
-  return raw.startsWith('/') ? raw : `/${raw}`;
+/**
+ * Resolve asset URL coming from DB/admin.
+ * - Hỗ trợ absolute URL, data/blob
+ * - Hỗ trợ Supabase public storage path/bucket
+ * - Chặn javascript: URL
+ */
+function resolveAssetUrl(input?: string | null): string | null {
+  return resolveImageUrl(input);
 }
 
 function shade(hex: string, amt: number) {
@@ -216,9 +220,9 @@ export default function Envelope2D({
   const [stampError, setStampError] = useState(false);
   const [linerError, setLinerError] = useState(false);
 
-  const textureUrl = useMemo(() => normalizeAssetUrl(texture), [texture]);
-  const linerUrl = useMemo(() => normalizeAssetUrl(linerPattern), [linerPattern]);
-  const stampImg = useMemo(() => normalizeAssetUrl(stampUrl), [stampUrl]);
+  const textureUrl = useMemo(() => resolveAssetUrl(texture), [texture]);
+  const linerUrl = useMemo(() => resolveAssetUrl(linerPattern), [linerPattern]);
+  const stampImg = useMemo(() => resolveAssetUrl(stampUrl), [stampUrl]);
 
   const baseColor = color || '#c9a86c';
   const darker = useMemo(() => shade(baseColor, -30), [baseColor]);

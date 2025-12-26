@@ -64,6 +64,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       'sender_name',
       'content',
       'rich_content', // ✅ Thêm rich_content
+      'used_fonts', // ✅ Fonts đã sử dụng trong thiệp
       'font_style',
       'text_effect',
       'photos',
@@ -93,7 +94,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     ] as const;
 
     for (const k of allow) {
-      if (k in body) patch[k] = body[k];
+      if (k in body) {
+        // ✅ Xử lý used_fonts: chỉ thêm nếu có giá trị, bỏ qua nếu column chưa tồn tại
+        if (k === 'used_fonts') {
+          // Chỉ thêm nếu có giá trị hợp lệ
+          if (body[k] !== null && body[k] !== undefined) {
+            patch[k] = Array.isArray(body[k]) ? body[k] : null;
+          }
+        } else {
+          patch[k] = body[k];
+        }
+      }
     }
 
     if (Object.keys(patch).length === 0) {
@@ -107,6 +118,28 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       .eq('user_id', user.id)
       .select('*')
       .maybeSingle();
+    
+    // ✅ Nếu lỗi do column không tồn tại, thử lại không có used_fonts
+    if (error && error.message?.includes('used_fonts')) {
+      const patchWithoutUsedFonts = { ...patch };
+      delete patchWithoutUsedFonts.used_fonts;
+      
+      if (Object.keys(patchWithoutUsedFonts).length > 0) {
+        const { data: retryData, error: retryError } = await supabase
+          .from('card_drafts')
+          .update(patchWithoutUsedFonts)
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .select('*')
+          .maybeSingle();
+        
+        if (retryError) {
+          return NextResponse.json({ error: retryError.message }, { status: 500 });
+        }
+        
+        return NextResponse.json({ data: retryData }, { status: 200 });
+      }
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });

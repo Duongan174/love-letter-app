@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&family=Pacifico&family=Lobster&family=Great+Vibes&family=Lexend:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@300;400;500;600;700&family=EB+Garamond:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700;800&family=Roboto:wght@300;400;500;700;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Lato:wght@300;400;700;900&family=Montserrat:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Quicksand:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700;800;900&family=Nunito:wght@300;400;500;600;700;800;900&display=swap');
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ECHO VINTAGE E-CARD - PREMIUM DESIGN SYSTEM
    Theme: Timeless Elegance - European Classic meets Vietnamese Warmth
@@ -1101,8 +1103,7 @@ span:not(.ProseMirror span):not(.ProseMirror *):not(.letter-content span):not(.l
 
 /* Default font for TipTap editor content */
 .ProseMirror,
-.ProseMirror p,
-.ProseMirror span {
+.ProseMirror p {
   font-family: 'Be Vietnam Pro', var(--font-body), system-ui, sans-serif;
 }
 
@@ -1130,14 +1131,6 @@ div.ProseMirror [data-font-family] {
  * ensure the inline styles are preserved and not overridden by prose/global styles.
  */
 
-/* Override prose font-family for spans with inline font-family */
-.prose span[style*="font-family"],
-.prose-lg span[style*="font-family"],
-.letter-content span[style*="font-family"],
-.rich-text-content span[style*="font-family"],
-[class*="prose"] span[style*="font-family"] {
-  font-family: inherit !important;
-}
 
 /* ✅ CRITICAL: Allow inline font-family to work in letter-content and rich-text-content */
 .letter-content span,

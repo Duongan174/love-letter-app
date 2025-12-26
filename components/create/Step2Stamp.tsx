@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import Envelope3D from './Envelope3D';
+import Envelope2D, { type SealDesign } from './Envelope2D';
 import { Loader2, Palette, Sparkles } from 'lucide-react';
 import { resolveImageUrl } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -490,15 +490,17 @@ export default function Step2Stamp({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Preview */}
         <div className="bg-gradient-to-br from-amber-50/50 via-white to-rose-50/30 rounded-2xl p-8 flex items-center justify-center min-h-[400px] border border-amber-200/50 shadow-xl">
-          <Envelope3D
+          <Envelope2D
             color={envelope?.color || '#eee'}
             pattern={envelope?.pattern || 'solid'}
+            patternColor={envelope?.pattern_color ?? undefined}
+            patternIntensity={envelope?.pattern_intensity ?? 0.15}
             texture={envelope?.texture ?? envelope?.thumbnail}
             stampUrl={selectedStamp?.image_url}
-            sealDesign={envelope?.default_seal || 'heart'}
+            sealDesign={(envelope?.default_seal || 'heart') as SealDesign}
             sealColor={envelope?.default_seal_color || '#c62828'}
             isOpen={false}
-            isFlipped={false}
+            side="front"
           />
         </div>
 

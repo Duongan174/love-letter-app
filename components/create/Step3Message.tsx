@@ -30,6 +30,7 @@ interface Step3MessageProps {
     senderName?: string;
     message?: string;
     richContent?: string | null; // ✅ Thêm richContent
+    usedFonts?: string[]; // ✅ Fonts đã sử dụng
     fontStyle?: string;
     textEffect?: string;
     letterBackground?: string;
@@ -963,6 +964,11 @@ export default function Step3Message({
                         onBackgroundChange={(color, pattern) => {
                           onUpdate({ letterBackground: color, letterPattern: pattern });
                         }}
+                        onUsedFontsChange={useCallback((usedFonts: string[]) => {
+                          // ✅ Lưu usedFonts vào state (chỉ khi thực sự có thay đổi)
+                          // Sử dụng functional update để tránh vòng lặp
+                          onUpdate({ usedFonts });
+                        }, [onUpdate])}
                         showToolbar={true}
                         showEditorContent={true}
                         onOpenStickerPalette={() => setShowStickerPalette(true)}

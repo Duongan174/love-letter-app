@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  LayoutDashboard, Users, Image, Mail, Stamp, Music, 
+  LayoutDashboard, Users, Image, Stamp, Music, 
   Gift, FileHeart, Settings, LogOut, Menu, X, Heart, Feather, Crown, Home, Sparkles, Frame
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,6 @@ const menuItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/users', icon: Users, label: 'Người dùng' },
   { href: '/admin/templates', icon: Image, label: 'Mẫu thiệp' },
-  { href: '/admin/envelopes', icon: Mail, label: 'Phong bì' },
   { href: '/admin/stamps', icon: Stamp, label: 'Tem' },
   { href: '/admin/music', icon: Music, label: 'Nhạc nền' },
   { href: '/admin/stickers', icon: Sparkles, label: 'Sticker' },

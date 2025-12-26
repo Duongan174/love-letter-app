@@ -13,7 +13,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight,
   Type, Palette, Sparkles, ChevronDown, Sticker, User, Lock, Crown
 } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ✅ Import new design presets system
@@ -26,6 +26,10 @@ import {
   GRADIENT_CATEGORIES,
   type DesignTier,
 } from '@/lib/design-presets';
+
+// ✅ Import font registry và loader
+import { getAllFonts, getFontById, VN_FONTS, EN_FONTS, type FontId } from '@/lib/font-registry';
+import { ensureFontsLoaded, ensureFontLoaded } from '@/lib/font-loader';
 
 interface RichTextEditorProps {
   content: string;
@@ -42,29 +46,17 @@ interface RichTextEditorProps {
   senderName?: string;
   onRecipientNameChange?: (name: string) => void;
   onSenderNameChange?: (name: string) => void;
-  onGetContent?: (getContent: () => string) => void; // ✅ Callback to expose getContent function
+  onGetContent?: (getContent: () => { html: string; usedFonts: FontId[] }) => void; // ✅ Callback với usedFonts
+  onUsedFontsChange?: (usedFonts: FontId[]) => void; // ✅ Callback khi usedFonts thay đổi
 }
 
-const FONT_FAMILIES = [
-  { id: 'dancing', name: 'Dancing Script', value: "'Dancing Script', cursive" },
-  { id: 'playfair', name: 'Playfair Display', value: "'Playfair Display', serif" },
-  { id: 'pacifico', name: 'Pacifico', value: "'Pacifico', cursive" },
-  { id: 'lobster', name: 'Lobster', value: "'Lobster', cursive" },
-  { id: 'vibes', name: 'Great Vibes', value: "'Great Vibes', cursive" },
-  { id: 'lexend', name: 'Lexend', value: "'Lexend', sans-serif" },
-  { id: 'cormorant', name: 'Cormorant Garamond', value: "'Cormorant Garamond', serif" },
-  { id: 'ebgaramond', name: 'EB Garamond', value: "'EB Garamond', serif" },
-  { id: 'inter', name: 'Inter', value: "'Inter', sans-serif" },
-  { id: 'notosans', name: 'Noto Sans', value: "'Noto Sans', sans-serif" },
-  { id: 'roboto', name: 'Roboto', value: "'Roboto', sans-serif" },
-  { id: 'opensans', name: 'Open Sans', value: "'Open Sans', sans-serif" },
-  { id: 'lato', name: 'Lato', value: "'Lato', sans-serif" },
-  { id: 'montserrat', name: 'Montserrat', value: "'Montserrat', sans-serif" },
-  { id: 'poppins', name: 'Poppins', value: "'Poppins', sans-serif" },
-  { id: 'quicksand', name: 'Quicksand', value: "'Quicksand', sans-serif" },
-  { id: 'raleway', name: 'Raleway', value: "'Raleway', sans-serif" },
-  { id: 'nunito', name: 'Nunito', value: "'Nunito', sans-serif" },
-];
+// ✅ Sử dụng font registry (100 fonts: 50 VN + 50 EN)
+// Convert sang format cũ để tương thích với code hiện tại
+const FONT_FAMILIES = getAllFonts().map(font => ({
+  id: font.id,
+  name: font.label,
+  value: `'${font.googleFamily}', ${font.fallback}`, // Dùng tên Google Font thật
+}));
 
 const FONT_SIZES = [
   { label: 'Nhỏ', value: '14' },
@@ -182,6 +174,189 @@ const FontSize = Extension.create({
   },
 });
 
+// ✅ Giữ lại TextStyle (đặc biệt là font-family/font-size/color) khi xuống dòng.
+// Nếu không, ProseMirror thường sẽ reset textStyle sau khi split paragraph,
+// dẫn tới "dòng mới bị mất font".
+// ✅ Virtualized Font List Component - chỉ render items visible
+function VirtualizedFontList({ 
+  fonts, 
+  onSelectFont 
+}: { 
+  fonts: typeof VN_FONTS; 
+  onSelectFont: (fontId: FontId) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 15 }); // Render 15 items đầu tiên
+  const ITEM_HEIGHT = 70; // Chiều cao mỗi item (px)
+  const VISIBLE_COUNT = 15; // Số items visible
+
+  // ✅ Tính toán visible range khi scroll
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const start = Math.floor(scrollTop / ITEM_HEIGHT);
+      const end = Math.min(start + VISIBLE_COUNT, fonts.length);
+      setVisibleRange({ start, end });
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    handleScroll(); // Initial calculation
+
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [fonts.length]);
+
+  // ✅ Render items visible + buffer
+  const visibleFonts = fonts.slice(
+    Math.max(0, visibleRange.start - 2), // Buffer trước
+    Math.min(fonts.length, visibleRange.end + 2) // Buffer sau
+  );
+  const startIndex = Math.max(0, visibleRange.start - 2);
+
+  return (
+    <div 
+      ref={containerRef}
+      className="overflow-y-auto p-2 flex-1"
+      style={{ 
+        height: '400px',
+        position: 'relative'
+      }}
+    >
+      {/* Spacer trước */}
+      {startIndex > 0 && (
+        <div style={{ height: startIndex * ITEM_HEIGHT }} />
+      )}
+      
+      {/* Visible items */}
+      {visibleFonts.map((font, idx) => {
+        const actualIndex = startIndex + idx;
+        const previewText = font.isVNSafe 
+          ? 'AaBbCcĐđĂăÂâÊêÔôƠơƯư 0123'
+          : 'The quick brown fox 0123';
+        
+        return (
+          <FontItem
+            key={font.id}
+            font={font}
+            previewText={previewText}
+            onSelect={() => onSelectFont(font.id)}
+            onVisible={() => {
+              // ✅ Load font khi item visible
+              ensureFontLoaded(font.id);
+            }}
+          />
+        );
+      })}
+      
+      {/* Spacer sau */}
+      {visibleRange.end < fonts.length && (
+        <div style={{ height: (fonts.length - visibleRange.end) * ITEM_HEIGHT }} />
+      )}
+    </div>
+  );
+}
+
+// ✅ Font Item Component với IntersectionObserver
+function FontItem({
+  font,
+  previewText,
+  onSelect,
+  onVisible,
+}: {
+  font: typeof VN_FONTS[0];
+  previewText: string;
+  onSelect: () => void;
+  onVisible: () => void;
+}) {
+  const itemRef = useRef<HTMLButtonElement>(null);
+
+  // ✅ IntersectionObserver để load font khi item visible
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            onVisible();
+            observer.disconnect(); // Chỉ load 1 lần
+          }
+        });
+      },
+      { rootMargin: '50px' } // Load trước khi vào viewport 50px
+    );
+
+    if (itemRef.current) {
+      observer.observe(itemRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [onVisible]);
+
+  return (
+    <button
+      ref={itemRef}
+      type="button"
+      onClick={onSelect}
+      onMouseEnter={() => {
+        // ✅ Load font khi hover (backup nếu IntersectionObserver chưa trigger)
+        ensureFontLoaded(font.id);
+      }}
+      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gold/10 transition group"
+      style={{ minHeight: '70px' }}
+    >
+      <div className="font-medium text-sm text-ink mb-1">
+        {font.label}
+      </div>
+      <div 
+        className="text-xs text-ink/70"
+        style={{ 
+          fontFamily: `'${font.googleFamily}', ${font.fallback}`,
+          lineHeight: '1.4'
+        }}
+      >
+        {previewText}
+      </div>
+      {!font.isVNSafe && (
+        <div className="text-xs text-amber-600 mt-1 opacity-0 group-hover:opacity-100 transition">
+          (Fallback VI)
+        </div>
+      )}
+    </button>
+  );
+}
+
+const PreserveTextStyleOnEnter = Extension.create({
+  name: 'preserveTextStyleOnEnter',
+
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => {
+        // Không can thiệp vào code block/list để tránh phá behavior mặc định
+        if (
+          this.editor.isActive('codeBlock') ||
+          this.editor.isActive('bulletList') ||
+          this.editor.isActive('orderedList') ||
+          this.editor.isActive('taskList')
+        ) {
+          return false;
+        }
+
+        const attrs = this.editor.getAttributes('textStyle') ?? {};
+        const didSplit = this.editor.commands.splitBlock();
+        if (!didSplit) return false;
+
+        // SetMark trên selection rỗng sẽ set storedMarks -> text gõ tiếp sẽ giữ style
+        if (attrs && Object.keys(attrs).length > 0) {
+          this.editor.commands.setMark('textStyle', attrs);
+        }
+
+        return true;
+      },
+    };
+  },
+});
+
 export default function RichTextEditor({
   content,
   onChange,
@@ -198,8 +373,10 @@ export default function RichTextEditor({
   onRecipientNameChange,
   onSenderNameChange,
   onGetContent,
+  onUsedFontsChange,
 }: RichTextEditorProps) {
   const [showFontMenu, setShowFontMenu] = useState(false);
+  const [fontTab, setFontTab] = useState<'vn' | 'en'>('vn'); // Tab font (VN/EN)
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showEffectMenu, setShowEffectMenu] = useState(false);
@@ -208,11 +385,19 @@ export default function RichTextEditor({
   const [selectedEffect, setSelectedEffect] = useState('none');
   const [currentFontSize, setCurrentFontSize] = useState('16');
   
+  // ✅ Track used fonts để lưu vào DB
+  const [usedFonts, setUsedFonts] = useState<Set<FontId>>(new Set());
+  // ✅ Track giá trị trước đó để tránh vòng lặp vô hạn
+  const prevUsedFontsRef = useRef<string>('');
+  
   const fontMenuRef = useRef<HTMLDivElement>(null);
   const colorMenuRef = useRef<HTMLDivElement>(null);
   const sizeMenuRef = useRef<HTMLDivElement>(null);
   const effectMenuRef = useRef<HTMLDivElement>(null);
   const bgMenuRef = useRef<HTMLDivElement>(null);
+
+  // ✅ Lưu selection cuối cùng để khi click toolbar/dropdown không bị mất vùng chọn.
+  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -230,6 +415,7 @@ export default function RichTextEditor({
         types: ['textStyle'],
       }),
       FontSize,
+      PreserveTextStyleOnEnter,
     ],
     content: content || '',
     onUpdate: ({ editor }) => {
@@ -245,6 +431,24 @@ export default function RichTextEditor({
       },
     },
   });
+
+  // Keep track of current selection so toolbar actions can restore it
+  useEffect(() => {
+    if (!editor) return;
+    const updateSelection = () => {
+      lastSelectionRef.current = {
+        from: editor.state.selection.from,
+        to: editor.state.selection.to,
+      };
+    };
+    updateSelection();
+    editor.on('selectionUpdate', updateSelection);
+    editor.on('transaction', updateSelection);
+    return () => {
+      editor.off('selectionUpdate', updateSelection);
+      editor.off('transaction', updateSelection);
+    };
+  }, [editor]);
 
   // Update editor content when prop changes
   const isUpdatingRef = useRef(false);
@@ -303,12 +507,66 @@ export default function RichTextEditor({
     }
   }, [content, editor, recipientName, senderName]);
 
-  // ✅ Expose getContent function to parent via callback
+  // ✅ Expose getContent function to parent via callback (với usedFonts)
   useEffect(() => {
     if (editor && onGetContent) {
-      onGetContent(() => editor.getHTML());
+      onGetContent(() => ({
+        html: editor.getHTML(),
+        usedFonts: Array.from(usedFonts),
+      }));
     }
-  }, [editor, onGetContent]);
+  }, [editor, onGetContent, usedFonts]);
+  
+  // ✅ Notify parent khi usedFonts thay đổi (chỉ khi thực sự có thay đổi)
+  useEffect(() => {
+    if (!onUsedFontsChange) return;
+    
+    const currentUsedFonts = Array.from(usedFonts).sort().join(',');
+    // Chỉ gọi callback nếu giá trị thực sự khác với lần trước
+    if (currentUsedFonts !== prevUsedFontsRef.current) {
+      prevUsedFontsRef.current = currentUsedFonts;
+      onUsedFontsChange(Array.from(usedFonts));
+    }
+  }, [usedFonts, onUsedFontsChange]);
+
+  // ✅ Extract used fonts từ HTML khi load content
+  useEffect(() => {
+    if (!editor || !content) return;
+    
+    // Parse HTML để tìm tất cả font-family được sử dụng
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    const spansWithFont = tempDiv.querySelectorAll('span[style*="font-family"]');
+    
+    const foundFontIds = new Set<FontId>();
+    spansWithFont.forEach((span) => {
+      const htmlElement = span as HTMLElement;
+      const styleAttr = htmlElement.getAttribute('style') || '';
+      const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+      
+      if (fontMatch) {
+        const fontValue = fontMatch[1].trim();
+        // Tìm fontId từ fontValue (có thể là Google Font name)
+        const fontName = fontValue.split("'")[1] || fontValue.split('"')[1] || fontValue.split(',')[0].trim();
+        
+        // Tìm trong registry
+        const foundFont = getAllFonts().find(f => 
+          f.googleFamily === fontName || 
+          fontValue.includes(f.googleFamily)
+        );
+        
+        if (foundFont) {
+          foundFontIds.add(foundFont.id);
+          // Load font ngay khi phát hiện
+          ensureFontsLoaded([foundFont.id]);
+        }
+      }
+    });
+    
+    if (foundFontIds.size > 0) {
+      setUsedFonts(prev => new Set([...prev, ...foundFontIds]));
+    }
+  }, [content, editor]);
 
   // Apply CSS variable for font-family on initial load and when content changes
   useEffect(() => {
@@ -393,35 +651,81 @@ export default function RichTextEditor({
    * Set font family for selected text
    * Uses CSS variable approach to override global !important rules
    */
-  const setFontFamily = (fontValue: string) => {
+  const chainWithSelection = () => {
+    const chain = editor.chain().focus();
+    const sel = lastSelectionRef.current;
+    if (sel && typeof sel.from === 'number' && typeof sel.to === 'number') {
+      chain.setTextSelection(sel);
+    }
+    return chain;
+  };
+
+  /**
+   * ✅ Set font family với load on-demand
+   * - Load font từ Google Fonts trước khi apply
+   * - Track used fonts để lưu vào DB
+   */
+  const setFontFamily = (fontIdOrValue: string) => {
     if (!editor) return;
     
-    editor.chain().focus().setFontFamily(fontValue).run();
+    // ✅ Tìm font từ registry (có thể là id hoặc value cũ)
+    let fontId: FontId | null = null;
+    let fontValue = fontIdOrValue;
     
-    // Apply CSS variables after DOM update
-    setTimeout(() => {
-      const view = editor.view;
-      const viewport = view.dom;
-      const spansWithFont = viewport.querySelectorAll('span[style*="font-family"]');
+    // Kiểm tra xem có phải là fontId từ registry không
+    const font = getFontById(fontIdOrValue);
+    if (font) {
+      fontId = font.id;
+      fontValue = `'${font.googleFamily}', ${font.fallback}`;
       
-      spansWithFont.forEach((span) => {
-        const htmlElement = span as HTMLElement;
-        const styleAttr = htmlElement.getAttribute('style') || '';
-        const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
-        
-        if (fontMatch) {
-          const extractedFont = fontMatch[1].trim();
-          htmlElement.setAttribute('data-font-family', 'true');
-          htmlElement.style.setProperty('--tiptap-font-family', extractedFont);
+      // ✅ Load font on-demand trước khi apply
+      ensureFontsLoaded([fontId]);
+      
+      // ✅ Track used font
+      setUsedFonts(prev => new Set([...prev, fontId!]));
+    } else {
+      // Fallback: tìm font theo value (tương thích với code cũ)
+      const foundFont = FONT_FAMILIES.find(f => f.value === fontIdOrValue || f.id === fontIdOrValue);
+      if (foundFont) {
+        const registryFont = getFontById(foundFont.id);
+        if (registryFont) {
+          fontId = registryFont.id;
+          fontValue = `'${registryFont.googleFamily}', ${registryFont.fallback}`;
+          ensureFontsLoaded([fontId]);
+          setUsedFonts(prev => new Set([...prev, fontId!]));
         }
-      });
-    }, 0);
+      }
+    }
+    
+    // ✅ Apply font với delay nhỏ để đảm bảo font đã load
+    setTimeout(() => {
+      chainWithSelection().setFontFamily(fontValue).run();
+      
+      // Apply CSS variables after DOM update
+      setTimeout(() => {
+        const view = editor.view;
+        const viewport = view.dom;
+        const spansWithFont = viewport.querySelectorAll('span[style*="font-family"]');
+        
+        spansWithFont.forEach((span) => {
+          const htmlElement = span as HTMLElement;
+          const styleAttr = htmlElement.getAttribute('style') || '';
+          const fontMatch = styleAttr.match(/font-family:\s*([^;]+)/);
+          
+          if (fontMatch) {
+            const extractedFont = fontMatch[1].trim();
+            htmlElement.setAttribute('data-font-family', 'true');
+            htmlElement.style.setProperty('--tiptap-font-family', extractedFont);
+          }
+        });
+      }, 0);
+    }, fontId ? 100 : 0); // Delay nếu cần load font mới
     
     setShowFontMenu(false);
   };
 
   const setFontSize = (size: string) => {
-    editor.chain().focus().setFontSize(size).run();
+    chainWithSelection().setFontSize(size).run();
     setCurrentFontSize(size);
     setShowSizeMenu(false);
   };
@@ -460,7 +764,7 @@ export default function RichTextEditor({
   };
 
   const setTextColor = (color: string) => {
-    editor.chain().focus().setColor(color).run();
+    chainWithSelection().setColor(color).run();
     setShowColorMenu(false);
   };
 
@@ -547,7 +851,7 @@ export default function RichTextEditor({
 
         <div className="w-px h-6 bg-gold/30 mx-1" />
 
-        {/* Font Family */}
+        {/* Font Family - Enhanced với preview và lazy-load */}
         <div className="relative" ref={fontMenuRef}>
           <button
             type="button"
@@ -565,19 +869,42 @@ export default function RichTextEditor({
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="absolute top-full left-0 mt-2 bg-cream-light border border-gold/20 rounded-xl shadow-vintage p-2 z-50 min-w-[200px] max-h-[300px] overflow-y-auto"
+                className="absolute top-full left-0 mt-2 bg-cream-light border border-gold/20 rounded-xl shadow-vintage z-50 w-80 max-h-[400px] overflow-hidden flex flex-col"
               >
-                {FONT_FAMILIES.map((font) => (
+                {/* Tabs */}
+                <div className="flex border-b border-gold/20 shrink-0">
                   <button
-                    key={font.id}
                     type="button"
-                    onClick={() => setFontFamily(font.value)}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gold/10 transition text-sm"
-                    style={{ fontFamily: font.value }}
+                    onClick={() => setFontTab('vn')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium transition ${
+                      fontTab === 'vn' 
+                        ? 'bg-burgundy text-cream' 
+                        : 'text-ink hover:bg-gold/10'
+                    }`}
                   >
-                    {font.name}
+                    Tiếng Việt (50)
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setFontTab('en')}
+                    className={`flex-1 px-4 py-2 text-sm font-medium transition ${
+                      fontTab === 'en' 
+                        ? 'bg-burgundy text-cream' 
+                        : 'text-ink hover:bg-gold/10'
+                    }`}
+                  >
+                    Tiếng Anh (50)
+                  </button>
+                </div>
+                
+                {/* Font List với preview - Virtualized */}
+                <VirtualizedFontList
+                  fonts={fontTab === 'vn' ? VN_FONTS : EN_FONTS}
+                  onSelectFont={(fontId) => {
+                    setFontFamily(fontId);
+                    setShowFontMenu(false);
+                  }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
