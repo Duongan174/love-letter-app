@@ -47,6 +47,7 @@ export interface CreateCardState {
   richContent: string | null;
   usedFonts: string[]; // ✅ Fonts đã sử dụng trong thiệp
   photos: string[];
+  photoTransforms?: Array<ImageTransform | undefined>; // ✅ Transform cho mỗi ảnh
   frameId: string | null; // ✅ Backward compatibility
   photoSlots: Array<{ slotIndex: number; photoUrl: string; transform?: ImageTransform }>; // ✅ Backward compatibility
   // ✅ Hỗ trợ nhiều frames - mỗi frame là một trang
@@ -118,6 +119,7 @@ function useCreateCard() {
     richContent: null,
     usedFonts: [], // ✅ Fonts đã sử dụng
     photos: [],
+    photoTransforms: [],
     frameId: null,
     photoSlots: [],
     frames: [], // ✅ Hỗ trợ nhiều frames
@@ -309,9 +311,24 @@ function useCreateCard() {
     setState((prev) => ({ ...prev, openMode: mode }));
   };
 
-  const addPhoto = (photoUrl: string) => setState(prev => ({ ...prev, photos: [...prev.photos, photoUrl] }));
+  const addPhoto = (photoUrl: string) => setState(prev => ({ 
+    ...prev, 
+    photos: [...prev.photos, photoUrl],
+    photoTransforms: [...(prev.photoTransforms || []), { scale: 1, x: 0, y: 0 }],
+  }));
   const removePhoto = (index: number) =>
-    setState(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
+    setState(prev => ({ 
+      ...prev, 
+      photos: prev.photos.filter((_, i) => i !== index),
+      photoTransforms: prev.photoTransforms?.filter((_, i) => i !== index),
+    }));
+  const updatePhotoTransform = (index: number, transform: ImageTransform) => {
+    setState(prev => {
+      const newTransforms = [...(prev.photoTransforms || [])];
+      newTransforms[index] = transform;
+      return { ...prev, photoTransforms: newTransforms };
+    });
+  };
   const selectFrame = (frame: any) => setState(prev => ({ ...prev, frameId: frame?.id || null, frame }));
   const updatePhotoSlot = (slotIndex: number, photoUrl: string, transform?: ImageTransform) => {
     setState(prev => {
@@ -407,6 +424,7 @@ function useCreateCard() {
     setOpenMode, // ✅ FIX: trả ra setOpenMode để page.tsx dùng được
     addPhoto,
     removePhoto,
+    updatePhotoTransform,
     selectFrame,
     updatePhotoSlot,
     updatePhotoSlotTransform,

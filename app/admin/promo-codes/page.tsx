@@ -96,9 +96,30 @@ export default function AdminPromoCodes() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Bạn có chắc muốn xóa mã này?')) {
-      await supabase.from('promo_codes').delete().eq('id', id);
+    if (!confirm('Xóa mã giảm giá này? Tất cả lịch sử sử dụng mã này cũng sẽ bị xóa.')) return;
+    
+    try {
+      // ✅ API endpoint server-side sẽ tự động xóa các records liên quan
+      const res = await fetch(`/api/admin/promo-codes?id=${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete promo code');
+      }
+
+      const result = await res.json();
+      
+      // Hiển thị thông báo nếu có uses đã bị xóa
+      if (result.deletedUses > 0) {
+        alert(`Đã xóa mã giảm giá và ${result.deletedUses} lịch sử sử dụng liên quan.`);
+      }
+      
       fetchPromoCodes();
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      alert('Lỗi xóa mã giảm giá: ' + (error.message || 'Đã có lỗi xảy ra'));
     }
   };
 

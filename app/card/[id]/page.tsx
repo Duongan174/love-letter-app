@@ -1238,12 +1238,13 @@ function ReaderModal({
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.6 }}
-            className="object-contain"
+            className="object-cover rounded-lg shadow-2xl"
             style={{
-              width: '1080px',
-              height: '1440px',
-              maxWidth: '100%',
-              maxHeight: '100vh'
+              width: '90%',
+              height: '90%',
+              maxWidth: '1080px',
+              maxHeight: '1440px',
+              objectFit: 'contain',
             }}
             onError={(e) => {
               console.error('Failed to load photo:', data.photos[photoIndex]);

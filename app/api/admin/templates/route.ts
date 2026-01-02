@@ -154,7 +154,12 @@ export async function PUT(request: NextRequest) {
 
 /**
  * DELETE /api/admin/templates
- * Xóa template
+ * Xóa template và các drafts liên quan
+ * 
+ * Thứ tự xóa:
+ * 1. Xóa các card_drafts đang sử dụng template này (để tránh foreign key constraint)
+ * 2. Xóa các cards đang sử dụng template này (nếu có)
+ * 3. Xóa template
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -187,20 +192,66 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing template id' }, { status: 400 });
     }
 
-    const { error } = await supabase
-      .from('card_templates')
-      .delete()
-      .eq('id', id);
+    // Bước 1: Đếm và xóa tất cả card_drafts đang sử dụng template này
+    const { count: draftsCount } = await supabase
+      .from('card_drafts')
+      .select('*', { count: 'exact', head: true })
+      .eq('template_id', id);
 
-    if (error) {
-      console.error('Delete template error:', error);
+    const { error: deleteDraftsError } = await supabase
+      .from('card_drafts')
+      .delete()
+      .eq('template_id', id);
+
+    if (deleteDraftsError) {
+      console.error('Delete drafts error:', deleteDraftsError);
       return NextResponse.json(
-        { error: error.message || 'Failed to delete template' },
+        { error: `Failed to delete related drafts: ${deleteDraftsError.message}` },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    // Bước 2: Đếm và xóa các cards đang sử dụng template này (nếu có)
+    const { count: cardsCount } = await supabase
+      .from('cards')
+      .select('*', { count: 'exact', head: true })
+      .eq('template_id', id);
+
+    if (cardsCount && cardsCount > 0) {
+      // Có cards đang sử dụng template này - xóa luôn để đảm bảo có thể xóa template
+      const { error: deleteCardsError } = await supabase
+        .from('cards')
+        .delete()
+        .eq('template_id', id);
+
+      if (deleteCardsError) {
+        console.error('Delete cards error:', deleteCardsError);
+        return NextResponse.json(
+          { error: `Failed to delete related cards: ${deleteCardsError.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Bước 3: Xóa template
+    const { error: deleteTemplateError } = await supabase
+      .from('card_templates')
+      .delete()
+      .eq('id', id);
+
+    if (deleteTemplateError) {
+      console.error('Delete template error:', deleteTemplateError);
+      return NextResponse.json(
+        { error: deleteTemplateError.message || 'Failed to delete template' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      deletedDrafts: draftsCount || 0,
+      deletedCards: cardsCount || 0
+    }, { status: 200 });
   } catch (error: any) {
     console.error('API error:', error);
     return NextResponse.json(

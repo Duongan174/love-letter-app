@@ -69,6 +69,7 @@ function CreatePage() {
     setOpenMode,
     addPhoto,
     removePhoto,
+    updatePhotoTransform,
     selectFrame,
     updatePhotoSlot,
     updatePhotoSlotTransform,
@@ -713,13 +714,11 @@ useEffect(() => {
             {currentStep === 4 && (
               <Suspense fallback={<Loading text="Đang tải..." />}>
               <Step4Photos
-                frameId={state.frameId}
-                photoSlots={state.photoSlots}
-                onSelectFrame={selectFrame}
-                onUpdatePhotoSlot={updatePhotoSlot}
-                onUpdatePhotoSlotTransform={updatePhotoSlotTransform}
-                onRemovePhotoSlot={removePhotoSlot}
-                userTym={user?.points || 0}
+                photos={state.photos}
+                onAddPhoto={addPhoto}
+                onRemovePhoto={removePhoto}
+                onUpdatePhotoTransform={updatePhotoTransform}
+                photoTransforms={state.photoTransforms}
               />
               </Suspense>
             )}

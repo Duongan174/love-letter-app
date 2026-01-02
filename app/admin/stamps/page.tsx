@@ -66,30 +66,30 @@ export default function AdminStamps() {
     setUploading(true);
 
     try {
-      // Upload to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `stamp_${Date.now()}.${fileExt}`;
-      const filePath = `stamps/${fileName}`;
+      // ✅ Dùng API endpoint server-side để upload (bypass Storage RLS)
+      const formData = new FormData();
+      formData.append('file', file);
 
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .upload(filePath, file);
+      const res = await fetch('/api/admin/stamps/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-      if (uploadError) throw uploadError;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to upload file');
+      }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('assets')
-        .getPublicUrl(filePath);
+      const data = await res.json();
 
       setForm(prev => ({ 
         ...prev, 
-        image_url: publicUrl,
+        image_url: data.url,
         image_transform: { scale: 1, x: 0, y: 0 },
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      alert('Lỗi upload ảnh. Vui lòng thử lại!');
+      alert('Lỗi upload ảnh: ' + (error.message || 'Vui lòng thử lại!'));
     } finally {
       setUploading(false);
     }
@@ -145,39 +145,27 @@ export default function AdminStamps() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bạn có chắc muốn xóa tem này? Các card và draft đang sử dụng tem này sẽ bị ảnh hưởng.')) return;
+    if (!confirm('Xóa tem này? Tất cả các card và draft đang sử dụng tem này cũng sẽ bị xóa.')) return;
     
     try {
-      // Kiểm tra xem có card nào đang sử dụng stamp này không
-      const { data: cardsUsingStamp } = await supabase
-        .from('cards')
-        .select('id')
-        .eq('stamp_id', id)
-        .limit(1);
+      // ✅ API endpoint server-side sẽ tự động xóa các drafts và cards liên quan trước khi xóa stamp
+      const res = await fetch(`/api/admin/stamps?id=${id}`, {
+        method: 'DELETE',
+      });
       
-      const { data: draftsUsingStamp } = await supabase
-        .from('card_drafts')
-        .select('id')
-        .eq('stamp_id', id)
-        .limit(1);
-      
-      if (cardsUsingStamp && cardsUsingStamp.length > 0) {
-        alert('Không thể xóa tem này vì đang có card đang sử dụng. Vui lòng xóa các card liên quan trước.');
-        return;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete stamp');
       }
+
+      const result = await res.json();
       
-      if (draftsUsingStamp && draftsUsingStamp.length > 0) {
-        // Xóa các draft đang sử dụng stamp này
-        await supabase.from('card_drafts').delete().eq('stamp_id', id);
-      }
-      
-      // Xóa stamp
-      const { error } = await supabase.from('stamps').delete().eq('id', id);
-      
-      if (error) {
-        console.error('Delete error:', error);
-        alert('Lỗi xóa tem: ' + error.message);
-        return;
+      // Hiển thị thông báo nếu có drafts/cards đã bị xóa
+      if (result.deletedDrafts > 0 || result.deletedCards > 0) {
+        const deletedInfo = [];
+        if (result.deletedDrafts > 0) deletedInfo.push(`${result.deletedDrafts} draft`);
+        if (result.deletedCards > 0) deletedInfo.push(`${result.deletedCards} card`);
+        alert(`Đã xóa tem và ${deletedInfo.join(', ')} liên quan.`);
       }
       
       fetchStamps();

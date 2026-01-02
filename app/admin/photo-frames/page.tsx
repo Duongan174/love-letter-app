@@ -121,32 +121,35 @@ export default function AdminPhotoFramesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bạn có chắc muốn xóa khuôn ảnh này?')) return;
+    if (!confirm('Xóa khuôn ảnh này? Các draft và card đang sử dụng sẽ được cập nhật (frame_id = null).')) return;
 
     try {
-      // Check if frame is used in any cards
-      const { data: cards } = await supabase
-        .from('cards')
-        .select('id')
-        .eq('frame_id', id)
-        .limit(1);
+      // ✅ API endpoint server-side sẽ tự động xử lý các drafts và cards liên quan
+      const res = await fetch(`/api/admin/photo-frames?id=${id}`, {
+        method: 'DELETE',
+      });
 
-      if (cards && cards.length > 0) {
-        alert('Không thể xóa khuôn ảnh này vì đã có thiệp sử dụng!');
-        return;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete photo frame');
       }
 
-      const { error } = await supabase
-        .from('photo_frames')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const result = await res.json();
+      
+      // Hiển thị thông báo nếu có drafts/cards đã được cập nhật
+      if (result.updatedDrafts > 0 || result.updatedCards > 0) {
+        const updatedInfo = [];
+        if (result.updatedDrafts > 0) updatedInfo.push(`${result.updatedDrafts} draft`);
+        if (result.updatedCards > 0) updatedInfo.push(`${result.updatedCards} card`);
+        alert(`Đã xóa khuôn ảnh và cập nhật ${updatedInfo.join(', ')} liên quan.`);
+      } else {
+        alert('Xóa thành công!');
+      }
+      
       loadFrames();
-      alert('Xóa thành công!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting frame:', error);
-      alert('Lỗi khi xóa khuôn ảnh');
+      alert('Lỗi khi xóa khuôn ảnh: ' + (error.message || 'Đã có lỗi xảy ra'));
     }
   };
 

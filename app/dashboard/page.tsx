@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import Button from '@/components/ui/Button';
 import Loading from '@/components/ui/Loading';
 import Header from '@/components/layout/Header';
+import PiggyBank from '@/components/ui/PiggyBank';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -197,6 +198,41 @@ export default function Dashboard() {
               Tạo Thiệp Mới
             </Button>
           </Link>
+        </motion.div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            PIGGY BANK SECTION
+        ════════════════════════════════════════════════════════════════════ */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-12"
+        >
+          <div className="bg-cream-light border border-gold/20 rounded-soft shadow-vintage p-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex-1 text-center md:text-left">
+                <h2 className="font-display text-2xl font-bold text-ink mb-2">
+                  💰 Con heo đất của bạn
+                </h2>
+                <p className="font-body text-ink/60 mb-4">
+                  Bạn đang có <span className="font-semibold text-burgundy">{user.points || 0} Tym</span> trong con heo đất.
+                  Sử dụng Tym để mở khóa các tính năng cao cấp và tạo thiệp đẹp hơn!
+                </p>
+                {user.points >= 1000 && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-elegant text-amber-800">
+                      Bạn có hơn 1000 đồng xu! 🎉
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                <PiggyBank points={user.points || 0} size="lg" showLabel={false} />
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════════

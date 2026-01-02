@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || 'User',
           avatar: authUser.user_metadata?.avatar_url || null,
           provider: authUser.app_metadata?.provider || null,
-          points: 0,
+          points: 1000, // ✅ User mới nhận 1000 đồng xu ban đầu
           role: 'user',
         });
 

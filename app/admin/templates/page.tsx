@@ -219,33 +219,10 @@ export default function AdminTemplates() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Xóa mẫu thiệp này? Các card và draft đang sử dụng mẫu này sẽ bị ảnh hưởng.')) return;
+    if (!confirm('Xóa mẫu thiệp này? Tất cả các card và draft đang sử dụng mẫu này cũng sẽ bị xóa.')) return;
     
     try {
-      // Kiểm tra xem có card nào đang sử dụng template này không
-      const { data: cardsUsingTemplate } = await supabase
-        .from('cards')
-        .select('id')
-        .eq('template_id', id)
-        .limit(1);
-      
-      const { data: draftsUsingTemplate } = await supabase
-        .from('card_drafts')
-        .select('id')
-        .eq('template_id', id)
-        .limit(1);
-      
-      if (cardsUsingTemplate && cardsUsingTemplate.length > 0) {
-        alert('Không thể xóa mẫu này vì đang có card đang sử dụng. Vui lòng xóa các card liên quan trước.');
-        return;
-      }
-      
-      if (draftsUsingTemplate && draftsUsingTemplate.length > 0) {
-        // Xóa các draft đang sử dụng template này
-        await supabase.from('card_drafts').delete().eq('template_id', id);
-      }
-      
-      // ✅ Dùng API endpoint server-side để delete (bypass RLS)
+      // ✅ API endpoint server-side sẽ tự động xóa các drafts và cards liên quan trước khi xóa template
       const res = await fetch(`/api/admin/templates?id=${id}`, {
         method: 'DELETE',
       });
@@ -253,6 +230,16 @@ export default function AdminTemplates() {
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || 'Failed to delete template');
+      }
+
+      const result = await res.json();
+      
+      // Hiển thị thông báo nếu có drafts/cards đã bị xóa
+      if (result.deletedDrafts > 0 || result.deletedCards > 0) {
+        const deletedInfo = [];
+        if (result.deletedDrafts > 0) deletedInfo.push(`${result.deletedDrafts} draft`);
+        if (result.deletedCards > 0) deletedInfo.push(`${result.deletedCards} card`);
+        alert(`Đã xóa mẫu thiệp và ${deletedInfo.join(', ')} liên quan.`);
       }
       
       fetchTemplates();

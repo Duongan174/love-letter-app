@@ -102,39 +102,27 @@ export default function AdminMusic() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bạn có chắc muốn xóa nhạc này? Các card và draft đang sử dụng nhạc này sẽ bị ảnh hưởng.')) return;
+    if (!confirm('Xóa nhạc này? Các draft và card đang sử dụng sẽ được cập nhật (music_id = null).')) return;
     
     try {
-      // Kiểm tra xem có card nào đang sử dụng music này không
-      const { data: cardsUsingMusic } = await supabase
-        .from('cards')
-        .select('id')
-        .eq('music_id', id)
-        .limit(1);
+      // ✅ API endpoint server-side sẽ tự động xử lý các drafts và cards liên quan
+      const res = await fetch(`/api/admin/music?id=${id}`, {
+        method: 'DELETE',
+      });
       
-      const { data: draftsUsingMusic } = await supabase
-        .from('card_drafts')
-        .select('id')
-        .eq('music_id', id)
-        .limit(1);
-      
-      if (cardsUsingMusic && cardsUsingMusic.length > 0) {
-        alert('Không thể xóa nhạc này vì đang có card đang sử dụng. Vui lòng xóa các card liên quan trước.');
-        return;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete music');
       }
+
+      const result = await res.json();
       
-      if (draftsUsingMusic && draftsUsingMusic.length > 0) {
-        // Set music_id = null cho các draft đang sử dụng
-        await supabase.from('card_drafts').update({ music_id: null }).eq('music_id', id);
-      }
-      
-      // Xóa music
-      const { error } = await supabase.from('music').delete().eq('id', id);
-      
-      if (error) {
-        console.error('Delete error:', error);
-        alert('Lỗi xóa nhạc: ' + error.message);
-        return;
+      // Hiển thị thông báo nếu có drafts/cards đã được cập nhật
+      if (result.updatedDrafts > 0 || result.updatedCards > 0) {
+        const updatedInfo = [];
+        if (result.updatedDrafts > 0) updatedInfo.push(`${result.updatedDrafts} draft`);
+        if (result.updatedCards > 0) updatedInfo.push(`${result.updatedCards} card`);
+        alert(`Đã xóa nhạc và cập nhật ${updatedInfo.join(', ')} liên quan.`);
       }
       
       fetchMusic();

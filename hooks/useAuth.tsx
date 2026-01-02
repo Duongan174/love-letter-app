@@ -105,6 +105,7 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
       name: meta.full_name ?? meta.name ?? null,
       avatar: meta.avatar_url ?? null,
       provider: appMeta.provider ?? null,
+      points: 1000, // ✅ User mới nhận 1000 đồng xu ban đầu
     };
 
     const ins = await supabase
