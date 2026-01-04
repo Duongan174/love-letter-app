@@ -4,7 +4,7 @@
 import { motion } from 'framer-motion';
 import { 
   Diamond, Crown, Zap, Check, ArrowRight, 
-  Heart, Star, ShieldCheck, Mail
+  Heart, Star, ShieldCheck, Mail, Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 import Header from '@/components/layout/Header';
@@ -13,57 +13,82 @@ import Button from '@/components/ui/Button';
 export default function ServicesPage() {
   const services = [
     {
-      id: 'tym-pack',
-      title: 'Nạp Tym Lẻ',
-      description: 'Mua Tym để mở khóa từng mẫu thiệp Premium bạn thích.',
-      price: 'Từ 20.000đ',
-      icon: <Heart className="w-8 h-8 text-rose-500" />,
-      image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=800&auto=format&fit=crop', // Hình trái tim/quà
+      id: 'free',
+      title: 'Free',
+      description: 'Gói miễn phí với các tính năng cơ bản để bắt đầu.',
+      price: 'Miễn phí',
+      icon: <Heart className="w-8 h-8 text-gray-500" />,
+      image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=800&auto=format&fit=crop',
       features: [
-        'Mua bao nhiêu dùng bấy nhiêu',
-        'Tym không bao giờ hết hạn',
-        'Tặng Tym cho bạn bè',
-        'Mở khóa tem & phong bì đặc biệt'
+        '5 mẫu thiệp cơ bản',
+        'Phong bì tiêu chuẩn',
+        'Chia sẻ qua link',
+        'Hỗ trợ cộng đồng'
       ],
-      cta: 'Mua Tym Ngay',
-      link: '/shop/tym', // Giả định link
+      cta: 'Bắt đầu miễn phí',
+      link: '/create',
       popular: false,
+      tier: 'free',
     },
     {
-      id: 'echo-plus',
-      title: 'Echo Plus',
-      description: 'Mở khóa toàn bộ kho thiệp & tính năng cao cấp không giới hạn.',
+      id: 'plus',
+      title: 'Plus',
+      description: 'Mở khóa nhiều mẫu thiệp và tính năng nâng cao hơn.',
       price: '99.000đ / tháng',
-      icon: <Crown className="w-8 h-8 text-amber-500" />,
-      image: 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=800&auto=format&fit=crop', // Hình hộp quà sang trọng
+      icon: <Zap className="w-8 h-8 text-emerald-500" />,
+      image: 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=800&auto=format&fit=crop',
       features: [
-        'Miễn phí tất cả mẫu Premium',
-        'Tải lên nhạc riêng của bạn',
-        'Không giới hạn dung lượng ảnh',
-        'Xóa logo Echo ở chân thiệp',
-        'Hỗ trợ ưu tiên 24/7'
+        'Tất cả mẫu thiệp Plus',
+        'Tương tác 3D cơ bản',
+        'Nhạc nền có sẵn',
+        'Tem thư & phong bì premium',
+        'Hỗ trợ email'
       ],
-      cta: 'Đăng Ký Ngay',
-      link: '/subscribe',
-      popular: true,
+      cta: 'Đăng Ký Plus',
+      link: '/subscribe?tier=plus',
+      popular: false,
+      tier: 'plus',
     },
     {
-      id: 'custom',
-      title: 'Thiết Kế Riêng',
-      description: 'Dành cho doanh nghiệp hoặc sự kiện đặc biệt cần sự độc bản.',
-      price: 'Liên hệ',
-      icon: <Diamond className="w-8 h-8 text-purple-500" />,
-      image: 'https://images.unsplash.com/photo-1542435503-956c469947f6?q=80&w=800&auto=format&fit=crop', // Hình thiết kế/vẽ
+      id: 'pro',
+      title: 'Pro',
+      description: 'Tính năng chuyên nghiệp cho người dùng nâng cao.',
+      price: '199.000đ / tháng',
+      icon: <Star className="w-8 h-8 text-blue-500" />,
+      image: 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=800&auto=format&fit=crop',
       features: [
-        'Thiết kế phong bì độc quyền',
-        'Tùy chỉnh animation theo yêu cầu',
-        'Tích hợp logo thương hiệu',
-        'Gửi hàng loạt (Bulk send) qua email',
-        'Báo cáo thống kê người nhận'
+        'Tất cả mẫu thiệp Pro',
+        'Tải lên nhạc riêng',
+        'Không giới hạn dung lượng ảnh',
+        'Xóa logo Echo',
+        'Tương tác 3D nâng cao',
+        'Hỗ trợ ưu tiên'
       ],
-      cta: 'Liên Hệ Tư Vấn',
-      link: '/contact',
+      cta: 'Đăng Ký Pro',
+      link: '/subscribe?tier=pro',
+      popular: true,
+      tier: 'pro',
+    },
+    {
+      id: 'ultra',
+      title: 'Ultra',
+      description: 'Gói cao cấp nhất với mọi tính năng không giới hạn.',
+      price: '399.000đ / tháng',
+      icon: <Crown className="w-8 h-8 text-purple-500" />,
+      image: 'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?q=80&w=800&auto=format&fit=crop',
+      features: [
+        'Tất cả mẫu thiệp Ultra độc quyền',
+        'Thiết kế tùy chỉnh theo yêu cầu',
+        'API tích hợp',
+        'Bulk sending không giới hạn',
+        'Báo cáo analytics chi tiết',
+        'Hỗ trợ 24/7 ưu tiên',
+        'Tích hợp logo thương hiệu'
+      ],
+      cta: 'Đăng Ký Ultra',
+      link: '/subscribe?tier=ultra',
       popular: false,
+      tier: 'ultra',
     },
   ];
 
@@ -101,7 +126,7 @@ export default function ServicesPage() {
       {/* Services Grid */}
       <section className="py-20 -mt-20 relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {services.map((service, index) => (
               <motion.div
                 key={service.id}

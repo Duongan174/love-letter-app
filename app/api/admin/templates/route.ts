@@ -39,8 +39,9 @@ export async function POST(request: NextRequest) {
       thumbnail,
       category,
       points_required,
-      is_premium,
-      is_active,
+      is_premium, // Deprecated, use subscription_tier
+      subscription_tier,
+      is_active, // Deprecated, always true
       media_type,
       image_transform,
       preview_url,
@@ -55,22 +56,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Insert với created_by
+    // 5. Determine subscription_tier (backward compatible)
+    const finalSubscriptionTier = subscription_tier || (is_premium ? 'ultra' : 'free');
+
+    // 6. Insert với created_by
+    const insertData: any = {
+      name,
+      thumbnail,
+      category,
+      points_required: points_required ?? 0,
+      subscription_tier: finalSubscriptionTier,
+      is_active: true, // Always true, deprecated field
+      media_type: media_type ?? 'image',
+      image_transform: image_transform ?? { scale: 1, x: 0, y: 0 },
+      preview_url: preview_url || null,
+      animation_type: animation_type || null,
+      created_by: user.id, // ✅ Set created_by để pass RLS
+    };
+
+    // Backward compatibility: keep is_premium if subscription_tier not provided
+    if (!subscription_tier) {
+      insertData.is_premium = is_premium ?? false;
+    }
+
     const { data, error } = await supabase
       .from('card_templates')
-      .insert({
-        name,
-        thumbnail,
-        category,
-        points_required: points_required ?? 0,
-        is_premium: is_premium ?? false,
-        is_active: is_active ?? true,
-        media_type: media_type ?? 'image',
-        image_transform: image_transform ?? { scale: 1, x: 0, y: 0 },
-        preview_url: preview_url || null,
-        animation_type: animation_type || null,
-        created_by: user.id, // ✅ Set created_by để pass RLS
-      })
+      .insert(insertData)
       .select('id')
       .single();
 
@@ -121,11 +132,24 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id, is_premium, subscription_tier, ...restUpdateData } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Missing template id' }, { status: 400 });
     }
+
+    // Handle subscription_tier (backward compatible)
+    const updateData: any = { ...restUpdateData };
+    
+    if (subscription_tier !== undefined) {
+      updateData.subscription_tier = subscription_tier;
+    } else if (is_premium !== undefined) {
+      // Backward compatibility: convert is_premium to subscription_tier
+      updateData.subscription_tier = is_premium ? 'ultra' : 'free';
+    }
+
+    // Always set is_active to true (deprecated but keep for compatibility)
+    updateData.is_active = true;
 
     const { data, error } = await supabase
       .from('card_templates')

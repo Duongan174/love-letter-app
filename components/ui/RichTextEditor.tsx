@@ -41,10 +41,6 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
   showEditorContent?: boolean;
   onOpenStickerPalette?: () => void;
-  recipientName?: string;
-  senderName?: string;
-  onRecipientNameChange?: (name: string) => void;
-  onSenderNameChange?: (name: string) => void;
   onGetContent?: (getContent: () => { html: string; usedFonts: FontId[] }) => void; // ✅ Callback với usedFonts
   onUsedFontsChange?: (usedFonts: FontId[]) => void; // ✅ Callback khi usedFonts thay đổi
 }
@@ -432,10 +428,6 @@ export default function RichTextEditor({
   showToolbar = true,
   showEditorContent = true,
   onOpenStickerPalette,
-  recipientName,
-  senderName,
-  onRecipientNameChange,
-  onSenderNameChange,
   onGetContent,
   onUsedFontsChange,
 }: RichTextEditorProps) {
@@ -762,44 +754,9 @@ export default function RichTextEditor({
 
   return (
     <div className={`flex flex-col h-full min-h-0 ${className}`}>
-      {/* Name Inputs - Above Toolbar */}
-      {(onRecipientNameChange || onSenderNameChange) && (
-        <div className="flex items-center gap-3 p-3 bg-cream-light border border-gold/20 rounded-t-xl shrink-0 flex-wrap">
-          {/* Recipient Name */}
-          {onRecipientNameChange && (
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              <User className="w-4 h-4 text-burgundy shrink-0" />
-              <label className="text-xs font-vn font-medium text-ink/70 shrink-0">Gửi đến:</label>
-              <input
-                type="text"
-                value={recipientName || ''}
-                onChange={(e) => onRecipientNameChange(e.target.value)}
-                placeholder="Tên người nhận..."
-                className="flex-1 px-3 py-1.5 bg-cream border border-gold/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy/30 font-vn text-sm transition"
-              />
-            </div>
-          )}
-
-          {/* Sender Name */}
-          {onSenderNameChange && (
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              <User className="w-4 h-4 text-burgundy shrink-0" />
-              <label className="text-xs font-vn font-medium text-ink/70 shrink-0">Từ:</label>
-              <input
-                type="text"
-                value={senderName || ''}
-                onChange={(e) => onSenderNameChange(e.target.value)}
-                placeholder="Tên của bạn..."
-                className="flex-1 px-3 py-1.5 bg-cream border border-gold/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-burgundy/30 font-vn text-sm transition"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Toolbar */}
       {showToolbar && (
-        <div className={`flex items-center gap-2 p-3 bg-cream-light border border-gold/20 ${(onRecipientNameChange || onSenderNameChange) ? 'border-t-0' : 'rounded-t-xl'} flex-wrap shrink-0`}
+        <div className={`flex items-center gap-2 p-3 bg-cream-light border border-gold/20 rounded-t-xl flex-wrap shrink-0`}
           onMouseDownCapture={(e) => {
             const target = e.target as HTMLElement;
             if (target.closest('button')) e.preventDefault();

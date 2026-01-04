@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Users, Image, Stamp, Music, 
-  Gift, FileHeart, Settings, LogOut, Menu, X, Heart, Feather, Crown, Home, Sparkles, Frame
+  Gift, FileHeart, Settings, LogOut, Menu, X, Heart, Feather, Crown, Home, Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { ElegantSpinner } from '@/components/ui/Loading';
@@ -20,7 +20,6 @@ const menuItems = [
   { href: '/admin/stamps', icon: Stamp, label: 'Tem' },
   { href: '/admin/music', icon: Music, label: 'Nhạc nền' },
   { href: '/admin/stickers', icon: Sparkles, label: 'Sticker' },
-  { href: '/admin/photo-frames', icon: Frame, label: 'Khuôn ảnh' },
   { href: '/admin/promo-codes', icon: Gift, label: 'Mã khuyến mãi' },
   { href: '/admin/cards', icon: FileHeart, label: 'Thiệp đã tạo' },
   { href: '/admin/settings', icon: Settings, label: 'Cài đặt' },

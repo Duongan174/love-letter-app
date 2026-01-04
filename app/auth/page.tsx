@@ -1,7 +1,7 @@
 // app/auth/page.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Heart, Sparkles, Facebook, Mail } from 'lucide-react';
@@ -21,6 +21,19 @@ const GoogleIcon = () => (
 export default function AuthPage() {
   const { user, signInWithFacebook, signInWithGoogle, loading } = useAuth();
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  // Check for error in URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get('error');
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+      // Clear error from URL
+      window.history.replaceState({}, '', '/auth');
+    }
+  }, []);
 
   useEffect(() => {
     if (user && !loading) {
@@ -29,6 +42,18 @@ export default function AuthPage() {
       router.push(redirect);
     }
   }, [user, loading, router]);
+
+  const handleSignIn = async (provider: 'google' | 'facebook', signInFn: () => Promise<void>) => {
+    try {
+      setError(null);
+      setIsSigningIn(true);
+      await signInFn();
+    } catch (err: any) {
+      console.error(`Error signing in with ${provider}:`, err);
+      setError(err?.message || `Không thể đăng nhập với ${provider === 'google' ? 'Google' : 'Facebook'}. Vui lòng thử lại.`);
+      setIsSigningIn(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50 flex items-center justify-center p-4">
@@ -53,23 +78,55 @@ export default function AuthPage() {
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Đăng nhập</h2>
         <p className="text-gray-500 mb-8">Kết nối để lưu giữ những kỷ niệm.</p>
 
+        {/* Error Message */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+          >
+            <p className="font-medium">Lỗi đăng nhập</p>
+            <p className="mt-1">{error}</p>
+          </motion.div>
+        )}
+
         <div className="space-y-4">
           {/* Nút Facebook */}
           <button
-            onClick={signInWithFacebook}
-            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-[#1877F2] text-white rounded-xl font-medium hover:bg-[#166fe5] transition shadow-md hover:shadow-lg"
+            onClick={() => handleSignIn('facebook', signInWithFacebook)}
+            disabled={isSigningIn || loading}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-[#1877F2] text-white rounded-xl font-medium hover:bg-[#166fe5] transition shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Facebook className="w-5 h-5" />
-            Tiếp tục với Facebook
+            {isSigningIn ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Đang đăng nhập...</span>
+              </>
+            ) : (
+              <>
+                <Facebook className="w-5 h-5" />
+                <span>Tiếp tục với Facebook</span>
+              </>
+            )}
           </button>
 
-          {/* Nút Google (Đã thêm lại) */}
+          {/* Nút Google */}
           <button
-            onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition shadow-sm hover:shadow-md"
+            onClick={() => handleSignIn('google', signInWithGoogle)}
+            disabled={isSigningIn || loading}
+            className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <GoogleIcon />
-            Tiếp tục với Google
+            {isSigningIn ? (
+              <>
+                <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                <span>Đang đăng nhập...</span>
+              </>
+            ) : (
+              <>
+                <GoogleIcon />
+                <span>Tiếp tục với Google</span>
+              </>
+            )}
           </button>
 
           {/* Nút Email */}

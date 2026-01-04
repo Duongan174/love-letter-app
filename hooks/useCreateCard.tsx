@@ -60,6 +60,32 @@ export interface CreateCardState {
   envelope: any;
   stamp: any;
   music: any;
+  // ✅ Utilities settings
+  utilities?: {
+    enableQRCode: boolean;
+    qrCodeStyle?: 'default' | 'rounded' | 'dots';
+    enablePassword: boolean;
+    password?: string;
+    enableExpiry: boolean;
+    expiryDate?: string | null;
+    enableEmailNotification: boolean;
+    notifyOnOpen?: boolean;
+    notifyOnView?: boolean;
+    enableAnalytics: boolean;
+    shareSettings: {
+      allowFacebook: boolean;
+      allowTwitter: boolean;
+      allowCopy: boolean;
+      allowDownload: boolean;
+    };
+    customDomain?: string;
+    sendMethod: 'link' | 'email' | 'facebook' | 'both';
+    recipientEmail?: string;
+    recipientFacebookId?: string;
+    scheduledSend: boolean;
+    scheduledSendDate?: string | null;
+    scheduledSendTime?: string | null;
+  };
 }
 
 /**
@@ -130,6 +156,26 @@ function useCreateCard() {
     envelope: null,
     stamp: null,
     music: null,
+    // ✅ Utilities với giá trị mặc định
+    utilities: {
+      enableQRCode: true,
+      qrCodeStyle: 'default',
+      enablePassword: false,
+      password: undefined,
+      enableExpiry: false,
+      expiryDate: null,
+      enableEmailNotification: false,
+      enableAnalytics: true,
+      shareSettings: {
+        allowFacebook: true,
+        allowTwitter: true,
+        allowCopy: true,
+        allowDownload: true,
+      },
+      customDomain: undefined,
+      sendMethod: 'link',
+      scheduledSend: false,
+    },
   });
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -386,17 +432,25 @@ function useCreateCard() {
   const selectMusic = (music: any) => setState(prev => ({ ...prev, musicId: music?.id || null, music }));
   const setSignature = (data: string) => setState(prev => ({ ...prev, signatureData: data }));
 
-  // Navigation Logic
+  // Navigation Logic - Updated for 5 steps (gộp Step 1+2 và Step 3+4)
   const canProceed = (step: number) => {
     switch (step) {
-      case 1: return !!state.envelopeId;
-      case 2: return !!state.stampId;
+      case 1: 
+        // Step 1: Phong bì & Tem - cần cả envelopeId và stampId
+        return !!state.envelopeId && !!state.stampId;
+      case 2:
+        // Step 2: Lời nhắn - cần ít nhất 1 trang đã được lưu (có nội dung)
+        // Kiểm tra letterPages có ít nhất 1 trang có nội dung
+        const hasContent = Array.isArray(state.letterPages) && state.letterPages.length > 0
+          ? state.letterPages.some((p) => (p ?? '').trim().length > 0)
+          : (state.message ?? '').trim().length > 0 || (state.richContent ?? '').trim().length > 0;
+        return hasContent;
       case 3:
-        return (
-          !!state.recipientName &&
-          Array.isArray(state.letterPages) &&
-          state.letterPages.some((p) => (p ?? '').trim().length > 0)
-        );
+        // Step 3: Music & Signature - không bắt buộc, có thể bỏ qua
+        return true;
+      case 4:
+        // Step 4: Utilities - không bắt buộc, có thể bỏ qua
+        return true;
       default: return true;
     }
   };
@@ -405,9 +459,13 @@ function useCreateCard() {
   const prevStep = () => { setCurrentStep(prev => Math.max(1, prev - 1)); };
   const goToStep = (step: number) => { 
     // Only allow going to completed steps (steps before current)
-    if (step >= 1 && step <= 7 && step < currentStep) {
+    if (step >= 1 && step <= 5 && step < currentStep) {
       setCurrentStep(step);
     }
+  };
+
+  const updateUtilities = (utilities: CreateCardState['utilities']) => {
+    setState(prev => ({ ...prev, utilities }));
   };
 
   return {
@@ -435,6 +493,7 @@ function useCreateCard() {
     updateFramePhotoSlot,
     selectMusic,
     setSignature,
+    updateUtilities, // ✅ Thêm updateUtilities vào return
     nextStep,
     prevStep,
     goToStep,

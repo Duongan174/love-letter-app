@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clean": "node -e \"const fs=require('fs');const path=require('path');['.next','node_modules/.cache','tsconfig.tsbuildinfo'].forEach(p=>{try{fs.rmSync(path.join(process.cwd(),p),{recursive:true,force:true});console.log('Deleted:',p)}catch(e){console.warn('Could not delete:',p)}});console.log('✅ Cleanup completed')\"",
+    "clean:all": "npm run clean && rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.8",
@@ -25,6 +27,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.26",
     "howler": "^2.2.4",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.561.0",
     "next": "^16.0.10",
     "next-cloudinary": "^6.17.5",
@@ -33,7 +36,9 @@
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^18.3.1",
-    "react-signature-canvas": "^1.0.6"
+    "react-signature-canvas": "^1.0.6",
+    "recharts": "^3.6.0",
+    "resend": "^6.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

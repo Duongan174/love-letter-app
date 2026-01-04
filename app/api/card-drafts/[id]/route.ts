@@ -1,22 +1,32 @@
 // app/api/card-drafts/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverLogger } from '@/lib/server-logger';
 
 function isUuid(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const startTime = Date.now();
   try {
     const { id } = await ctx.params;
-    if (!isUuid(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    if (!isUuid(id)) {
+      serverLogger.warn('Invalid UUID in GET card-draft', { id });
+      return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    }
+
+    serverLogger.logRequest('GET', `/api/card-drafts/${id}`);
 
     const supabase = await createClient();
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      serverLogger.warn('Unauthorized GET card-draft', { draftId: id });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { data, error } = await supabase
       .from('card_drafts')
@@ -25,26 +35,52 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (error) {
+      serverLogger.logDbOperation('SELECT', 'card_drafts', {
+        recordId: id,
+        userId: user.id,
+        error,
+      });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      serverLogger.warn('Card draft not found', { draftId: id, userId: user.id });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('GET', `/api/card-drafts/${id}`, {
+      userId: user.id,
+      duration,
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (e: any) {
+    serverLogger.logApiError('GET', `/api/card-drafts/[id]`, e);
     return NextResponse.json({ error: e?.message ?? 'Internal error' }, { status: 500 });
   }
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const startTime = Date.now();
   try {
     const { id } = await ctx.params;
-    if (!isUuid(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    if (!isUuid(id)) {
+      serverLogger.warn('Invalid UUID in PATCH card-draft', { id });
+      return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    }
+
+    serverLogger.logRequest('PATCH', `/api/card-drafts/${id}`);
 
     const supabase = await createClient();
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      serverLogger.warn('Unauthorized PATCH card-draft', { draftId: id });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     let body: any = null;
     try {
@@ -92,6 +128,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       'envelope_seal_color',
       'envelope_liner_pattern_type',
       'envelope_liner_color',
+      // ✅ Step 4: Utilities settings
+      'utilities',
     ] as const;
 
     for (const k of allow) {
@@ -147,11 +185,101 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       }
     }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (error) {
+      serverLogger.logDbOperation('UPDATE', 'card_drafts', {
+        recordId: id,
+        userId: user.id,
+        error,
+      });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      serverLogger.warn('Card draft not found for PATCH', { draftId: id, userId: user.id });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('PATCH', `/api/card-drafts/${id}`, {
+      userId: user.id,
+      duration,
+      body: { updatedFields: Object.keys(patch) },
+    });
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (e: any) {
+    serverLogger.logApiError('PATCH', `/api/card-drafts/[id]`, e);
+    return NextResponse.json({ error: e?.message ?? 'Internal error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const startTime = Date.now();
+  try {
+    const { id } = await ctx.params;
+    if (!isUuid(id)) {
+      serverLogger.warn('Invalid UUID in DELETE card-draft', { id });
+      return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    }
+
+    serverLogger.logRequest('DELETE', `/api/card-drafts/${id}`);
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      serverLogger.warn('Unauthorized DELETE card-draft', { draftId: id });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Kiểm tra xem draft có thuộc về user này không
+    const { data: existingDraft, error: checkError } = await supabase
+      .from('card_drafts')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      serverLogger.logDbOperation('SELECT', 'card_drafts', {
+        recordId: id,
+        userId: user.id,
+        error: checkError,
+      });
+      return NextResponse.json({ error: checkError.message }, { status: 500 });
+    }
+
+    if (!existingDraft) {
+      serverLogger.warn('Card draft not found for DELETE', { draftId: id, userId: user.id });
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    // Xóa draft
+    const { error: deleteError } = await supabase
+      .from('card_drafts')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (deleteError) {
+      serverLogger.logDbOperation('DELETE', 'card_drafts', {
+        recordId: id,
+        userId: user.id,
+        error: deleteError,
+      });
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
+
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('DELETE', `/api/card-drafts/${id}`, {
+      userId: user.id,
+      duration,
+    });
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (e: any) {
+    serverLogger.logApiError('DELETE', `/api/card-drafts/[id]`, e);
     return NextResponse.json({ error: e?.message ?? 'Internal error' }, { status: 500 });
   }
 }

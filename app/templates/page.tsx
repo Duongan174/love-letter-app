@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Sparkles, Star, Crown, Search, Loader2, Play, ArrowRight, Feather, Filter } from 'lucide-react';
+import { Heart, Sparkles, Star, Crown, Search, Loader2, Play, ArrowRight, Feather, Filter, Menu, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Header from '@/components/layout/Header';
 import Button from '@/components/ui/Button';
@@ -24,12 +24,22 @@ interface Template {
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
-const categories = [
-  { id: 'all', name: 'Tất cả', icon: Sparkles },
-  { id: 'love', name: 'Tình yêu', icon: Heart },
-  { id: 'birthday', name: 'Sinh nhật', icon: Star },
-  { id: 'classic', name: 'Cổ điển', icon: Crown },
-];
+interface Category {
+  id: string;
+  name: string;
+  label: string;
+  emoji: string;
+  display_order: number;
+  is_active: boolean;
+  parent_id?: string | null;
+  parent?: {
+    id: string;
+    name: string;
+    label: string;
+    emoji: string;
+  } | null;
+  subcategories?: Category[];
+}
 
 const isVideo = (url: string) => url?.match(/\.(mp4|webm)$/i);
 
@@ -50,13 +60,26 @@ const OrnamentDivider = ({ className = '' }: { className?: string }) => (
 export default function TemplatesPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // FETCH TEMPLATES
+  // FETCH TEMPLATES & CATEGORIES
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -75,7 +98,25 @@ export default function TemplatesPage() {
         setLoading(false);
       }
     };
+
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch('/api/admin/categories');
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to fetch categories');
+        }
+        const { data } = await res.json();
+        setCategories(data || []);
+      } catch (error: any) {
+        console.error('Error fetching categories:', error);
+        // Set empty array on error to prevent UI crashes
+        setCategories([]);
+      }
+    };
+
     fetchTemplates();
+    fetchCategories();
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -127,22 +168,36 @@ const handleSelectTemplate = async (templateId: string) => {
   // FILTERED TEMPLATES
   // ─────────────────────────────────────────────────────────────────────────────
   const filteredTemplates = templates.filter(t => {
-    const matchCategory = activeCategory === 'all' || t.category === activeCategory;
-    const matchSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCategory && matchSearch;
+    let matchCategory = false;
+    if (activeCategory === 'all') {
+      matchCategory = true;
+    } else {
+      // Check if it matches the selected category (parent or subcategory)
+      matchCategory = t.category === activeCategory;
+      // Also include subcategories when parent is selected
+      if (!matchCategory) {
+        const selectedParent = categories.find(c => c.name === activeCategory && !c.parent_id);
+        if (selectedParent?.subcategories) {
+          matchCategory = selectedParent.subcategories.some(sub => sub.name === t.category);
+        }
+      }
+    }
+    return matchCategory;
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-cream pb-20">
-      <Header />
+    <div className="flex flex-col h-screen bg-cream overflow-hidden">
+      {/* Header và Hero section - không co giãn (flex-shrink-0) */}
+      <div className="flex-shrink-0 z-10">
+        <Header />
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          HERO SECTION
-      ════════════════════════════════════════════════════════════════════════ */}
-      <section className="relative py-16 bg-vintage-gradient overflow-hidden">
+        {/* ═══════════════════════════════════════════════════════════════════════
+            HERO SECTION
+        ════════════════════════════════════════════════════════════════════════ */}
+        <section className="relative py-12 bg-vintage-gradient overflow-hidden">
         {/* Decorative elements */}
         <div className="absolute top-4 left-4 text-3xl text-gold/20 font-serif">❧</div>
         <div className="absolute top-4 right-4 text-3xl text-gold/20 font-serif rotate-90">❧</div>
@@ -152,13 +207,13 @@ const handleSelectTemplate = async (templateId: string) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span className="font-script text-2xl text-gold mb-4 block">
+            <span className="font-script text-2xl text-gold mb-2 block">
               Bộ sưu tập
             </span>
-            <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-ink mb-4">
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-ink mb-2">
               Mẫu Thiệp <span className="text-burgundy">Độc Đáo</span>
             </h1>
-            <OrnamentDivider className="max-w-md mx-auto mb-6" />
+            <OrnamentDivider className="max-w-md mx-auto mb-4" />
             <p className="font-body text-lg text-ink/60 max-w-2xl mx-auto">
               Chọn một thiết kế ưng ý để bắt đầu hành trình gửi gắm yêu thương. 
               Mỗi mẫu thiệp đều được thiết kế tỉ mỉ với phong cách vintage sang trọng.
@@ -166,76 +221,218 @@ const handleSelectTemplate = async (templateId: string) => {
           </motion.div>
         </div>
       </section>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          FILTERS & SEARCH
+          MAIN CONTENT WITH SIDEBAR - Sử dụng flex-1 để tự động lấp đầy
       ════════════════════════════════════════════════════════════════════════ */}
-      <section className="sticky top-16 z-30 bg-cream-light/95 backdrop-blur-sm border-b border-gold/20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="flex flex-1 gap-6 max-w-full mx-auto px-4 pt-4 pb-0 overflow-hidden w-full">
+        {/* Mobile Toggle Button */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="lg:hidden fixed top-24 left-4 z-50 p-2 bg-burgundy text-cream-light rounded-lg shadow-lg hover:bg-burgundy-dark transition-colors"
+          aria-label="Toggle sidebar"
+        >
+          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+
+        {/* Mobile Overlay */}
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden fixed inset-0 bg-ink/50 backdrop-blur-sm z-40"
+          />
+        )}
+
+        {/* Sidebar - Category Filters */}
+        <motion.aside
+          initial={false}
+          animate={{
+            x: sidebarOpen || isDesktop ? 0 : '-100%',
+          }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className={`
+            fixed lg:relative lg:block left-0 top-0 
+            h-full
+            w-64 flex-shrink-0 z-40 lg:z-auto
+            bg-cream-light lg:bg-transparent
+            overflow-y-auto
+            ${sidebarOpen ? 'shadow-2xl' : 'lg:shadow-none'}
+          `}
+        >
+          <div className="bg-cream-light rounded-xl p-4 border border-gold/20 shadow-sm mb-4 lg:sticky lg:top-0">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold text-ink text-sm uppercase tracking-wide">
+                Danh mục
+              </h3>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden p-1 hover:bg-gold/10 rounded transition"
+                aria-label="Close sidebar"
+              >
+                <X className="w-4 h-4 text-ink/60" />
+              </button>
+            </div>
             
-            {/* Category Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto">
-              {categories.map((cat) => {
-                const Icon = cat.icon;
-                const isActive = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`
-                      flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap
-                      font-display text-sm font-medium transition-all duration-300
-                      ${isActive 
-                        ? 'bg-burgundy text-cream-light shadow-vintage' 
-                        : 'bg-cream text-ink/70 border border-gold/30 hover:border-gold hover:text-burgundy'
-                      }
-                    `}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Search */}
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/40" />
-              <input 
-                type="text" 
-                placeholder="Tìm kiếm mẫu thiệp..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="input-vintage pl-10 py-2"
-              />
+            {/* All category */}
+            <motion.button
+              onClick={() => {
+                setActiveCategory('all');
+                setSidebarOpen(false);
+              }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className={`
+                w-full flex items-center gap-2 px-3 py-2.5 rounded-lg mb-2
+                font-vn text-sm font-medium transition-all duration-300
+                ${activeCategory === 'all'
+                  ? 'bg-burgundy text-cream-light shadow-vintage' 
+                  : 'bg-cream text-ink/70 border border-gold/30 hover:border-gold hover:text-burgundy hover:bg-gold/10'
+                }
+              `}
+            >
+              <Sparkles className="w-4 h-4" />
+              Tất cả
+            </motion.button>
+            
+            {/* Parent categories from API */}
+            <div className="space-y-1">
+              {categories
+                .filter(cat => !cat.parent_id)
+                .sort((a, b) => a.display_order - b.display_order)
+                .map((parentCat) => {
+                  const isActive = activeCategory === parentCat.name;
+                  const hasSubcategories = parentCat.subcategories && parentCat.subcategories.length > 0;
+                  const isExpanded = expandedParents.has(parentCat.id) || isActive;
+                  const showSubcategories = isExpanded && hasSubcategories;
+                  
+                  return (
+                    <div key={parentCat.id} className="mb-1">
+                      <motion.button
+                        onClick={() => {
+                          if (hasSubcategories) {
+                            setExpandedParents(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(parentCat.id)) {
+                                newSet.delete(parentCat.id);
+                              } else {
+                                newSet.add(parentCat.id);
+                              }
+                              return newSet;
+                            });
+                          }
+                          setActiveCategory(parentCat.name);
+                          setSidebarOpen(false);
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`
+                          w-full flex items-center gap-2 px-3 py-2.5 rounded-lg
+                          font-vn text-sm font-medium transition-all duration-300
+                          ${isActive 
+                            ? 'bg-burgundy text-cream-light shadow-vintage' 
+                            : 'bg-cream text-ink/70 border border-gold/30 hover:border-gold hover:text-burgundy hover:bg-gold/10'
+                          }
+                        `}
+                      >
+                        <span className="text-base">{parentCat.emoji}</span>
+                        <span className="flex-1 text-left">{parentCat.label}</span>
+                        {hasSubcategories && (
+                          <motion.div
+                            animate={{ rotate: isExpanded ? 90 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </motion.div>
+                        )}
+                      </motion.button>
+                      
+                      {/* Subcategories (animated) */}
+                      <AnimatePresence>
+                        {showSubcategories && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-1 ml-4 space-y-1 pl-4 border-l-2 border-gold/30">
+                              {parentCat.subcategories
+                                ?.sort((a, b) => a.display_order - b.display_order)
+                                .map((subCat, index) => {
+                                  const isSubActive = activeCategory === subCat.name;
+                                  return (
+                                    <motion.button
+                                      key={subCat.id}
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      transition={{ delay: index * 0.05 }}
+                                      onClick={() => {
+                                        setActiveCategory(subCat.name);
+                                        setSidebarOpen(false);
+                                      }}
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      className={`
+                                        w-full flex items-center gap-2 px-3 py-2 rounded-lg
+                                        font-vn text-xs font-medium transition-all duration-300
+                                        ${isSubActive 
+                                          ? 'bg-burgundy/80 text-cream-light shadow-vintage' 
+                                          : 'bg-cream/80 text-ink/70 border border-gold/20 hover:border-gold hover:text-burgundy hover:bg-gold/10'
+                                        }
+                                      `}
+                                    >
+                                      <span className="text-sm">{subCat.emoji}</span>
+                                      <span className="flex-1 text-left">{subCat.label}</span>
+                                    </motion.button>
+                                  );
+                                })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
             </div>
           </div>
-        </div>
-      </section>
+        </motion.aside>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          TEMPLATES GRID
-      ════════════════════════════════════════════════════════════════════════ */}
-      <section className="max-w-7xl mx-auto px-4 py-12">
-        {loading ? (
-          /* Loading State */
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-full border-4 border-gold/30 border-t-burgundy animate-spin mb-4" />
-            <p className="font-elegant text-ink/60">Đang tải mẫu thiệp...</p>
-          </div>
-        ) : filteredTemplates.length > 0 ? (
-          /* Templates Grid */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* Main Content - Templates Grid */}
+        <main className="flex-1 min-w-0 h-full overflow-y-auto pb-20 pr-2">
+          {loading ? (
+            /* Loading State */
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-16 h-16 rounded-full border-4 border-gold/30 border-t-burgundy animate-spin mb-4" />
+              <p className="font-elegant text-ink/60">Đang tải mẫu thiệp...</p>
+            </div>
+          ) : filteredTemplates.length > 0 ? (
+            /* Templates Grid */
+            <motion.div 
+              key={activeCategory}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+            >
             <AnimatePresence mode="popLayout">
               {filteredTemplates.map((template, index) => (
                 <motion.div
                   key={template.id}
                   layout
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  transition={{ delay: index * 0.05 }}
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                  transition={{ 
+                    delay: index * 0.05,
+                    duration: 0.3,
+                    ease: 'easeOut'
+                  }}
                   onMouseEnter={() => setHoveredId(template.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   className="group"
@@ -316,7 +513,7 @@ const handleSelectTemplate = async (templateId: string) => {
                 </motion.div>
               ))}
             </AnimatePresence>
-          </div>
+          </motion.div>
         ) : (
           /* Empty State */
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -328,50 +525,19 @@ const handleSelectTemplate = async (templateId: string) => {
             </h3>
             <OrnamentDivider className="max-w-[200px] mb-4" />
             <p className="font-body text-ink/60 max-w-md mb-6">
-              Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm để xem các mẫu thiệp khác.
+              Thử thay đổi danh mục để xem các mẫu thiệp khác.
             </p>
             <Button 
               variant="secondary"
-              onClick={() => {
-                setActiveCategory('all');
-                setSearchQuery('');
-              }}
+              onClick={() => setActiveCategory('all')}
             >
               Xem tất cả mẫu
             </Button>
           </div>
         )}
-      </section>
+        </main>
+      </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          CTA SECTION
-      ════════════════════════════════════════════════════════════════════════ */}
-      <section className="max-w-4xl mx-auto px-4 py-12">
-        <div className="relative p-8 md:p-12 bg-burgundy rounded-soft overflow-hidden text-center">
-          {/* Decorative */}
-          <div className="absolute top-4 left-4 text-3xl text-gold/20 font-serif">❧</div>
-          <div className="absolute bottom-4 right-4 text-3xl text-gold/20 font-serif rotate-180">❧</div>
-          
-          <span className="font-script text-xl text-gold mb-3 block">
-            Bạn có ý tưởng riêng?
-          </span>
-          <h2 className="font-display text-2xl md:text-3xl font-bold text-cream-light mb-4">
-            Tạo thiệp từ đầu với sáng tạo của bạn
-          </h2>
-          <p className="font-body text-cream-light/70 max-w-lg mx-auto mb-6">
-            Nếu không tìm thấy mẫu ưng ý, bạn có thể bắt đầu với một khung thiệp trống 
-            và tự do sáng tạo theo phong cách riêng.
-          </p>
-          <Button 
-            variant="gold" 
-            size="lg"
-            icon={<Sparkles className="w-5 h-5" />}
-            onClick={() => router.push('/create')}
-          >
-            Tạo Thiệp Tùy Chỉnh
-          </Button>
-        </div>
-      </section>
     </div>
   );
 }

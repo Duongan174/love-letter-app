@@ -63,15 +63,17 @@ export function createGradientCSS(preset: GradientPreset): string {
 
 /**
  * Helper function để tạo CSS pattern từ preset
+ * ✅ Sửa: Tách shorthand `background` thành các properties riêng biệt để tránh conflict với `backgroundSize`
  */
 export function createPatternCSS(preset: PatternPreset, bgColor: string): React.CSSProperties {
   const isGradient = bgColor.includes('gradient');
   const svgUrl = `url("data:image/svg+xml,${encodeURIComponent(preset.svg)}")`;
   
   if (isGradient) {
+    // ✅ Tách `background` thành `backgroundImage` và không dùng shorthand để tránh conflict với `backgroundSize`
     return {
-      background: `${svgUrl}, ${bgColor}`,
-      backgroundSize: preset.size,
+      backgroundImage: `${svgUrl}, ${bgColor}`,
+      backgroundSize: `${preset.size}, cover`, // Size cho pattern và gradient
     };
   }
   

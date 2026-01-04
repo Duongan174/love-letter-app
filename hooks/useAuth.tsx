@@ -14,6 +14,7 @@ import type { User as SbUser } from '@supabase/supabase-js';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 type Role = 'admin' | 'user' | string;
+export type SubscriptionTier = 'free' | 'plus' | 'pro' | 'ultra';
 
 export type AppUser = {
   id: string;
@@ -23,6 +24,8 @@ export type AppUser = {
   provider: string | null;
   points: number;
   role: Role;
+  subscription_tier: SubscriptionTier;
+  subscription_expires_at: string | null;
 };
 
 type AuthCtx = {
@@ -69,6 +72,8 @@ function buildFallbackUser(sbUser: SbUser): AppUser {
     provider: appMeta.provider ?? null,
     points: 0,
     role: 'user',
+    subscription_tier: 'free',
+    subscription_expires_at: null,
   };
 }
 
@@ -106,12 +111,14 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
       avatar: meta.avatar_url ?? null,
       provider: appMeta.provider ?? null,
       points: 1000, // ✅ User mới nhận 1000 đồng xu ban đầu
+      subscription_tier: 'free',
+      subscription_expires_at: null,
     };
 
     const ins = await supabase
       .from('users')
       .insert(insertPayload)
-      .select('id,email,name,avatar,provider,points,role')
+      .select('id,email,name,avatar,provider,points,role,subscription_tier,subscription_expires_at')
       .maybeSingle();
 
     if (ins.error || !ins.data) {
@@ -127,7 +134,28 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
       provider: ins.data.provider ?? null,
       points: Number((ins.data as any).points ?? 0),
       role: ((ins.data as any).role ?? 'user') as Role,
+      subscription_tier: ((ins.data as any).subscription_tier ?? 'free') as SubscriptionTier,
+      subscription_expires_at: (ins.data as any).subscription_expires_at ?? null,
     };
+  }
+
+  // Kiểm tra và tự động downgrade nếu subscription hết hạn
+  const expiresAt = (data as any).subscription_expires_at;
+  const currentTier = ((data as any).subscription_tier ?? 'free') as SubscriptionTier;
+  let finalTier = currentTier;
+  
+  if (currentTier !== 'free' && expiresAt) {
+    const expiryDate = new Date(expiresAt);
+    if (expiryDate < new Date()) {
+      // Subscription đã hết hạn, tự động downgrade
+      finalTier = 'free';
+      // Có thể gọi API để update, nhưng để tránh blocking, sẽ update async
+      supabase
+        .from('users')
+        .update({ subscription_tier: 'free', subscription_expires_at: null })
+        .eq('id', data.id)
+        .then(() => console.log('Auto-downgraded expired subscription'));
+    }
   }
 
   return {
@@ -138,6 +166,8 @@ async function fetchProfile(sbUser: SbUser): Promise<AppUser> {
     provider: data.provider ?? null,
     points: Number((data as any).points ?? 0),
     role: ((data as any).role ?? 'user') as Role,
+    subscription_tier: finalTier,
+    subscription_expires_at: expiresAt ?? null,
   };
 }
 
@@ -295,19 +325,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyProfileFromSbUser, refreshProfile, supabase]);
 
   const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const redirectUrl = `${window.location.origin}/auth/callback`;
+    console.log('🔵 Signing in with Google, redirect to:', redirectUrl);
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { 
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
     });
-    if (error) console.warn('signIn google warn:', normalizeUnknownError(error));
+    
+    if (error) {
+      console.error('❌ Google sign in error:', normalizeUnknownError(error));
+      throw error;
+    }
+    
+    if (data?.url) {
+      console.log('✅ Google OAuth URL generated:', data.url);
+    }
   }, [supabase]);
 
   const signInWithFacebook = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const redirectUrl = `${window.location.origin}/auth/callback`;
+    console.log('🔵 Signing in with Facebook, redirect to:', redirectUrl);
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'facebook',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { 
+        redirectTo: redirectUrl,
+      },
     });
-    if (error) console.warn('signIn facebook warn:', normalizeUnknownError(error));
+    
+    if (error) {
+      console.error('❌ Facebook sign in error:', normalizeUnknownError(error));
+      throw error;
+    }
+    
+    if (data?.url) {
+      console.log('✅ Facebook OAuth URL generated:', data.url);
+    }
   }, [supabase]);
 
   const signOut = useCallback(async () => {

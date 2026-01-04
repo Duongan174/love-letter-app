@@ -3,26 +3,33 @@
 import { useEffect, useState, Suspense, useRef, useMemo, lazy } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence, type Transition } from 'framer-motion';
-import { Heart, ChevronLeft, ChevronRight, AlertCircle, Crown } from 'lucide-react';
+import { Heart, ChevronLeft, ChevronRight, AlertCircle, Crown, HelpCircle } from 'lucide-react';
 import { splitLetterPages } from '@/hooks/useCreateCard';
 
 // Components
-import StepIndicator from '@/components/create/StepIndicator';
 import Loading from '@/components/ui/Loading';
 
 // ✅ Lazy load step components để giảm bundle size ban đầu
-const Step1Envelope = lazy(() => import('@/components/create/Step1Envelope'));
-const Step2Stamp = lazy(() => import('@/components/create/Step2Stamp'));
-const Step3Message = lazy(() => import('@/components/create/Step3Message'));
-const Step4Photos = lazy(() => import('@/components/create/Step4Photos'));
-const Step5Music = lazy(() => import('@/components/create/Step5Music'));
-const Step6Signature = lazy(() => import('@/components/create/Step6Signature'));
-const Step7Preview = lazy(() => import('@/components/create/Step7Preview'));
+// ✅ Cấu trúc 5 bước:
+//    Step 1: Envelope + Stamp (Step1EnvelopeStamp) - gộp từ Step1Envelope + Step2Stamp
+//    Step 2: Message + Photos (Step2MessagePhotos) - gộp từ Step3Message + Step4Photos
+//    Step 3: Music + Signature (Step3MusicSignature) - gộp từ Step5Music + Step6Signature
+//    Step 4: Utilities (Step4Utilities) - Tính năng tiện ích mới
+//    Step 5: Preview (Step5Preview)
+const Step1EnvelopeStamp = lazy(() => import('@/components/create/Step1EnvelopeStamp'));
+const Step2MessagePhotos = lazy(() => import('@/components/create/Step2MessagePhotos'));
+const Step3MusicSignature = lazy(() => import('@/components/create/Step3MusicSignature'));
+const Step4Utilities = lazy(() => import('@/components/create/Step4Utilities'));
+const Step5Preview = lazy(() => import('@/components/create/Step5Preview'));
 
 // Hooks
 import { useAuth } from '@/hooks/useAuth';
 import { useCreateCard } from '@/hooks/useCreateCard';
+import { useAutoSave } from '@/hooks/useAutoSave';
 import { supabase } from '@/lib/supabase';
+
+// Components
+import AutoSaveIndicator from '@/components/create/AutoSaveIndicator';
 
 // Animation
 const pageVariants = {
@@ -76,6 +83,7 @@ function CreatePage() {
     removePhotoSlot,
     selectMusic,
     setSignature,
+    updateUtilities,
     nextStep,
     prevStep,
     goToStep,
@@ -114,6 +122,13 @@ function CreatePage() {
   // INIT: Auth + Draft / Template (Blocking - wait for completion)
   // ─────────────────────────────────────────────
   useEffect(() => {
+    // ⚠️ CRITICAL: Redirect immediately if no templateId or draftId
+    // This prevents showing step 1 before redirecting to templates
+    if (!draftId && !templateId && !authLoading) {
+      router.replace('/templates');
+      return;
+    }
+
     // If already initialized and completed, don't re-run
     if (isInitializedRef.current) {
       return;
@@ -234,6 +249,18 @@ function CreatePage() {
               signaturePattern: d.signature_pattern || 'solid',
             });
             
+            // ✅ Step 4: Load utilities từ draft
+            if (d.utilities) {
+              try {
+                const utilities = typeof d.utilities === 'string' 
+                  ? JSON.parse(d.utilities) 
+                  : d.utilities;
+                updateUtilities(utilities);
+              } catch (e) {
+                console.warn('Failed to parse utilities from draft:', e);
+              }
+            }
+            
             // ✅ Mark draft as fully loaded - enable autosave
             setIsDraftLoaded(true);
           } catch (fetchError: any) {
@@ -315,165 +342,24 @@ function CreatePage() {
     updateMessage,
   ]);
 
-  // AUTO-SAVE DRAFT (debounce) - stable deps (fix "deps changed size")
-// Gom mọi thứ cần autosave vào 1 key ổn định (deps luôn cố định 2 phần tử)
-const autosaveKey = useMemo(() => {
-  // IMPORTANT: luôn trả về string (kể cả khi photos undefined)
-  const payload = {
-    template_id: state.templateId ?? null,
-    envelope_id: state.envelopeId ?? null,
-    stamp_id: state.stampId ?? null,
-    music_id: state.musicId ?? null,
-    recipient_name: state.recipientName ?? '',
-    sender_name: state.senderName ?? '',
-    content: state.message ?? '',
-    rich_content: state.richContent ?? null, // ✅ Lưu rich_content (HTML từ TipTap)
-    used_fonts: Array.isArray(state.usedFonts) ? state.usedFonts : null, // ✅ Lưu fonts đã sử dụng
-    font_style: state.fontStyle ?? 'serif',
-    text_effect: state.textEffect ?? null,
-    photos: Array.isArray(state.photos) ? state.photos : [], // luôn là array
-    // ✅ Step 4: Photo Frame data
-    frame_id: state.frameId ?? null,
-    photo_slots: Array.isArray(state.photoSlots) ? state.photoSlots : [], // Lưu photoSlots với transform
-    // ✅ Step 6: Signature data
-    signature_data: state.signatureData ?? null,
-    // ✅ Step 3: Letter background/pattern cho trang xem thiệp
-    letter_background: state.letterBackground ?? '#ffffff',
-    letter_pattern: state.letterPattern ?? 'solid',
-    letter_container_background: state.letterContainerBackground ?? 'linear-gradient(to bottom right, rgba(254, 243, 199, 0.3), rgba(254, 226, 226, 0.2))',
-    // ✅ Step 2: Background colors cho các phần khác
-    cover_background: state.coverBackground ?? '#fdf2f8',
-    cover_pattern: state.coverPattern ?? 'solid',
-    photo_background: state.photoBackground ?? '#fff8e1',
-    photo_pattern: state.photoPattern ?? 'solid',
-    signature_background: state.signatureBackground ?? '#fce4ec',
-    signature_pattern: state.signaturePattern ?? 'solid',
-    // ✅ Envelope customization data
-    envelope_color: state.envelope?.color ?? state.envelope?.envelopeBaseColor ?? null, // ✅ Lưu màu từ customization
-    envelope_pattern: state.envelope?.pattern ?? 'solid',
-    envelope_pattern_color: state.envelope?.patternColor ?? '#5d4037',
-    envelope_pattern_intensity: state.envelope?.patternIntensity ?? 0.15,
-    envelope_seal_design: state.envelope?.sealDesign ?? 'heart',
-    envelope_seal_color: state.envelope?.sealColor ?? '#c62828',
-    envelope_liner_pattern_type: state.envelope?.linerPatternType ?? null,
-    envelope_liner_color: state.envelope?.linerColor ?? '#ffffff',
-  };
-
-  return JSON.stringify(payload);
-}, [
-  state.templateId,
-  state.envelopeId,
-  state.stampId,
-  state.musicId,
-  state.recipientName,
-  state.senderName,
-  state.message,
-  state.richContent,
-  state.fontStyle,
-  state.textEffect,
-  state.photos,
-  state.frameId, // ✅ Step 4: Frame ID
-  state.photoSlots, // ✅ Step 4: Photo Slots với transform
-  state.signatureData, // ✅ Step 6: Signature data
-  state.letterBackground, // ✅ Step 3: Letter background
-  state.letterPattern, // ✅ Step 3: Letter pattern
-  state.coverBackground, // ✅ Step 2: Cover background
-  state.coverPattern,
-  state.photoBackground, // ✅ Step 2: Photo background
-  state.photoPattern,
-  state.signatureBackground, // ✅ Step 2: Signature background
-  state.signaturePattern,
-  state.envelope?.pattern,
-  state.envelope?.patternColor,
-  state.envelope?.patternIntensity,
-  state.envelope?.sealDesign,
-  state.envelope?.sealColor,
-  state.envelope?.linerPatternType,
-  state.envelope?.linerColor,
-]);
-
-useEffect(() => {
-  // ⚠️ CRITICAL: Don't autosave until draft is fully loaded
-  // This prevents overwriting template_id with null during initialization
-  if (!draftId || !isDraftLoaded) return;
-
-  const controller = new AbortController();
-
-  const t = window.setTimeout(async () => {
-    try {
-      const res = await fetch(`/api/card-drafts/${encodeURIComponent(draftId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: autosaveKey, // autosaveKey chính là JSON string payload
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        let errorText = '';
-        let errorBody: any = null;
-        
-        try {
-          errorText = await res.text();
-          if (errorText && errorText.trim()) {
-            try {
-              errorBody = JSON.parse(errorText);
-            } catch {
-              errorBody = errorText;
-            }
-          } else {
-            errorBody = null;
-          }
-        } catch (readErr: any) {
-          errorText = `Failed to read response: ${readErr?.message || 'Unknown error'}`;
-          errorBody = errorText;
-        }
-
-        // Log với thông tin đầy đủ - đảm bảo luôn có ít nhất một số thuộc tính
-        const errorInfo: Record<string, any> = {
-          message: 'Autosave request failed',
-          status: typeof res?.status === 'number' ? res.status : 'unknown',
-          statusText: res?.statusText || 'Unknown status',
-          url: res?.url || `/api/card-drafts/${draftId}`,
-          ok: res?.ok ?? false,
-          type: res?.type || 'unknown',
-          draftId: draftId || 'missing',
-        };
-
-        // Thêm thông tin về response body
-        if (errorBody !== null && errorBody !== undefined) {
-          errorInfo.body = errorBody;
-        } else {
-          errorInfo.body = 'Empty response body';
-        }
-
-        if (errorText) {
-          errorInfo.rawText = errorText;
-          errorInfo.textLength = errorText.length;
-        } else {
-          errorInfo.rawText = '';
-          errorInfo.textLength = 0;
-        }
-
-        // Log với format rõ ràng
-        console.error('autosave failed', JSON.stringify(errorInfo, null, 2));
-      }
-    } catch (err: any) {
-      // Only log non-abort errors
-      if (err?.name !== 'AbortError') {
-        console.error('autosave exception', {
-          name: err?.name,
-          message: err?.message,
-          stack: err?.stack
-        });
-      }
-    }
-  }, 600);
-
-  return () => {
-    controller.abort();
-    window.clearTimeout(t);
-  };
-}, [draftId, autosaveKey, isDraftLoaded]); // ✅ deps luôn cố định 3 phần tử
+  // ─────────────────────────────────────────────
+  // AUTO-SAVE DRAFT - Sử dụng hook useAutoSave
+  // ─────────────────────────────────────────────
+  const { status: autoSaveStatus } = useAutoSave({
+    draftId: draftId || null,
+    state,
+    enabled: isDraftLoaded && !!draftId, // ⚠️ CRITICAL: Chỉ enable khi draft đã load xong
+    debounceMs: 800, // Debounce 800ms để tối ưu performance
+    onSaveSuccess: () => {
+      // Optional: Có thể thêm toast notification ở đây
+      // toast.success('Đã lưu tự động');
+    },
+    onSaveError: (error) => {
+      // Optional: Có thể thêm toast notification ở đây
+      console.error('Auto save failed:', error);
+      // toast.error('Lưu tự động thất bại: ' + error.message);
+    },
+  });
 
 
 
@@ -524,7 +410,7 @@ useEffect(() => {
       return json.data.id as string;
     } catch (error: any) {
       console.error('Error in handleSendCard:', error);
-      throw error; // Re-throw to let Step7Preview handle it
+      throw error; // Re-throw to let Step5Preview handle it
     } finally {
       setIsSubmitting(false);
     }
@@ -582,13 +468,13 @@ useEffect(() => {
   // UI - Redesigned for 7-step flow
   // ─────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-gradient-to-br from-amber-50/40 via-white to-rose-50/30 flex flex-col overflow-hidden">
-      {/* Simplified Header with Step Indicator */}
-      <header className="sticky top-0 z-50 bg-gradient-to-b from-white via-amber-50/30 to-white border-b border-amber-200/50 shadow-lg flex-shrink-0">
+    <main className="min-h-screen bg-gradient-to-br from-amber-50/40 via-white to-rose-50/30 flex flex-col overflow-hidden pt-16">
+      {/* Simplified Header with Progress Bar */}
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-gradient-to-b from-white via-amber-50/30 to-white border-b border-amber-200/50 shadow-lg flex-shrink-0">
         {/* Top Bar: Logo & Navigation */}
         <div className="max-w-full mx-auto px-6 h-16 flex items-center justify-between">
           {/* Left: Logo & Back */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <button
               onClick={() =>
                 currentStep > 1 ? setShowExitModal(true) : router.push('/templates')
@@ -603,49 +489,62 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Right: Points & Navigation */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-100 to-amber-50 rounded-full border border-amber-200/50 shadow-sm">
-              <span className="text-amber-700">💜</span>
-              <span className="font-bold text-amber-800 text-sm">{user?.points ?? 0}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={prevStep}
-                disabled={currentStep === 1}
-                className={`p-2.5 rounded-xl transition-all ${
-                  currentStep === 1
-                    ? 'text-gray-300 cursor-not-allowed'
-                    : 'text-amber-700 hover:bg-amber-100 border border-transparent hover:border-amber-200'
-                }`}
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+
+          {/* Right: Navigation */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={prevStep}
+              disabled={currentStep === 1}
+              className={`p-2.5 rounded-xl transition-all ${
+                currentStep === 1
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : 'text-amber-700 hover:bg-amber-100 border border-transparent hover:border-amber-200'
+              }`}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="relative group">
               <button
                 onClick={nextStep}
-                disabled={!canProceed(currentStep) || currentStep === 7}
-                className={`flex items-center gap-2 px-8 py-2.5 rounded-xl transition-all font-semibold text-sm ${
-                  canProceed(currentStep) && currentStep < 7
+                disabled={!canProceed(currentStep) || currentStep === 5}
+                className={`flex items-center gap-2 px-8 py-2.5 rounded-xl transition-all font-semibold text-sm relative ${
+                  canProceed(currentStep) && currentStep < 5
                     ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-sm'
                 }`}
               >
-                <span>{currentStep === 7 ? 'Hoàn thành' : 'Tiếp theo'}</span>
-                {currentStep < 7 && <ChevronRight className="w-4 h-4" />}
+                <span>{currentStep === 5 ? 'Hoàn thành' : `Tiếp theo (${currentStep}/5)`}</span>
+                {currentStep < 5 && <ChevronRight className="w-4 h-4" />}
               </button>
+              {/* Tooltip khi disabled */}
+              {(!canProceed(currentStep) || currentStep === 5) && (
+                <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  {currentStep === 5 
+                    ? 'Đã hoàn thành tất cả các bước'
+                    : currentStep === 1
+                    ? 'Vui lòng chọn phong bì và tem thư'
+                    : currentStep === 2
+                    ? 'Vui lòng lưu ít nhất 1 trang trước khi tiếp tục'
+                    : 'Vui lòng hoàn thành bước hiện tại'
+                  }
+                  <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Step Indicator Bar */}
-        <div className="border-t border-amber-200/50 bg-gradient-to-b from-amber-50/50 to-white">
-          <StepIndicator 
-            currentStep={currentStep} 
-            totalSteps={7} 
-            onStepClick={goToStep}
+        
+        {/* Progress Bar - Mảnh, hiển thị tiến trình rõ ràng */}
+        <div className="w-full h-1 bg-gray-100">
+          <div 
+            className="h-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 transition-all duration-500 ease-out"
+            style={{ width: `${(currentStep / 5) * 100}%` }}
           />
         </div>
       </header>
+
+      {/* Auto Save Indicator */}
+      <AutoSaveIndicator status={autoSaveStatus} position="top-center" />
 
       {/* Main Content Area - Professional Layout */}
       <div className="flex flex-1 overflow-hidden min-h-0">
@@ -663,15 +562,9 @@ useEffect(() => {
               >
             {currentStep === 1 && (
               <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step1Envelope
+              <Step1EnvelopeStamp
                 selectedEnvelope={state.envelope}
                 onSelectEnvelope={selectEnvelope}
-              />
-              </Suspense>
-            )}
-            {currentStep === 2 && (
-              <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step2Stamp
                 envelope={state.envelope}
                 liner={null}
                 selectedStamp={state.stamp}
@@ -691,29 +584,21 @@ useEffect(() => {
               />
               </Suspense>
             )}
-            {currentStep === 3 && (
+            {currentStep === 2 && (
               <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step3Message
-                recipientName={state.recipientName}
-                senderName={state.senderName}
+              <Step2MessagePhotos
                 message={state.message}
                 letterPages={state.letterPages}
+                onUpdateLetterPages={updateLetterPages}
                 fontStyle={state.fontStyle}
                 textEffect={state.textEffect}
-                  letterBackground={state.letterBackground}
-                  letterPattern={state.letterPattern}
-                  letterContainerBackground={state.letterContainerBackground}
-                  stickers={state.stickers}
-                  signatureData={state.signatureData}
-                  userTym={user?.points || 0}
+                letterBackground={state.letterBackground}
+                letterPattern={state.letterPattern}
+                letterContainerBackground={state.letterContainerBackground}
+                stickers={state.stickers}
+                signatureData={state.signatureData}
+                userTym={user?.points || 0}
                 onUpdate={updateMessage}
-                onUpdateLetterPages={updateLetterPages}
-              />
-              </Suspense>
-            )}
-            {currentStep === 4 && (
-              <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step4Photos
                 photos={state.photos}
                 onAddPhoto={addPhoto}
                 onRemovePhoto={removePhoto}
@@ -722,37 +607,57 @@ useEffect(() => {
               />
               </Suspense>
             )}
-            {currentStep === 5 && (
+            {currentStep === 3 && (
               <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step5Music
+              <Step3MusicSignature
                 selectedMusicId={state.musicId}
                 onSelectMusic={selectMusic}
-              />
-              </Suspense>
-            )}
-            {currentStep === 6 && (
-              <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step6Signature
                 signatureData={state.signatureData}
                 onSetSignature={(data) => {
                   if (data === null) {
                     setSignature('');
-                     return;
+                    return;
                   }
                   setSignature(data);
                 }}
               />
               </Suspense>
             )}
-            {currentStep === 7 && (
+            {currentStep === 4 && (
               <Suspense fallback={<Loading text="Đang tải..." />}>
-              <Step7Preview
+              <Step4Utilities
+                utilities={state.utilities || {
+                  enableQRCode: true,
+                  qrCodeStyle: 'default',
+                  enablePassword: false,
+                  password: undefined,
+                  enableExpiry: false,
+                  expiryDate: null,
+                  enableEmailNotification: false,
+                  enableAnalytics: true,
+                  shareSettings: {
+                    allowFacebook: true,
+                    allowTwitter: true,
+                    allowCopy: true,
+                    allowDownload: true,
+                  },
+                  customDomain: undefined,
+                  sendMethod: 'link',
+                  scheduledSend: false,
+                }}
+                onUpdate={updateUtilities}
+              />
+              </Suspense>
+            )}
+            {currentStep === 5 && (
+              <Suspense fallback={<Loading text="Đang tải..." />}>
+              <Step5Preview
                 state={state}
                 userTym={user?.points ?? 0}
                 onSend={handleSendCard}
               />
               </Suspense>
-              )}
+            )}
               </motion.div>
             </AnimatePresence>
           </div>

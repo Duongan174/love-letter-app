@@ -1,12 +1,20 @@
 // app/api/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import cloudinary from '@/lib/cloudinary';
+import { serverLogger } from '@/lib/server-logger';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  const url = new URL(request.url);
+  
   try {
+    serverLogger.logRequest('POST', url.pathname);
+    
     // 1. Kiểm tra cấu hình trước
     if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY) {
-      console.error('❌ Thiếu cấu hình Cloudinary trong .env.local');
+      serverLogger.error('Missing Cloudinary configuration', undefined, {
+        path: url.pathname,
+      });
       return NextResponse.json(
         { error: 'Server chưa cấu hình Cloudinary' }, 
         { status: 500 }
@@ -18,6 +26,7 @@ export async function POST(request: NextRequest) {
     const folder = formData.get('folder') as string || 'vintage-ecard';
 
     if (!file) {
+      serverLogger.warn('No file in upload request', { path: url.pathname });
       return NextResponse.json({ error: 'Không tìm thấy file' }, { status: 400 });
     }
 
@@ -35,13 +44,19 @@ export async function POST(request: NextRequest) {
         },
         (error, result) => {
           if (error) {
-            console.error('Cloudinary Upload Error:', error);
+            serverLogger.error('Cloudinary upload error', error);
             reject(error);
           } else {
             resolve(result);
           }
         }
       ).end(buffer);
+    });
+
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('POST', url.pathname, {
+      body: { folder, fileSize: file.size, format: result.format },
+      duration,
     });
 
     return NextResponse.json({
@@ -53,7 +68,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ Upload API Error:', error);
+    const duration = Date.now() - startTime;
+    serverLogger.logApiError('POST', url.pathname, error);
     return NextResponse.json(
       { error: error.message || 'Lỗi upload server' }, 
       { status: 500 }

@@ -21,6 +21,55 @@ html {
   overflow-y: scroll;
 }
 
+/* ✅ Custom Scrollbar Style - Giống Canva */
+/* ✅ Premium Custom Scrollbar - Mảnh, chỉ hiện khi hover */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  overflow-y: scroll !important;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.custom-scrollbar:hover {
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  display: block;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+  margin: 4px 0;
+  transition: background 0.3s ease;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+  border: none;
+  min-height: 40px;
+  transition: background 0.3s ease;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #4b5563;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    2. CSS CUSTOM PROPERTIES (DESIGN TOKENS)
    ───────────────────────────────────────────────────────────────────────────── */

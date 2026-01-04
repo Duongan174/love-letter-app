@@ -7,14 +7,14 @@ import { User, Heart, Sparkles, Sticker, X, Save, Edit2, Lock } from 'lucide-rea
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import StickerPalette from '@/components/ui/StickerPalette';
 import PageManager from '@/components/create/PageManager';
+import ImagePageEditor from '@/components/ui/ImagePageEditor';
+import { ImageTransform } from '@/components/ui/ImageEditor';
 import { useDrag, useDrop } from 'react-dnd';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { LETTER_PAGE_BREAK_TOKEN } from '@/hooks/useCreateCard';
 
 interface Step3MessageProps {
-  recipientName: string;
-  senderName: string;
   message: string;
   letterPages?: string[];
   onUpdateLetterPages?: (pages: string[]) => void;
@@ -27,8 +27,6 @@ interface Step3MessageProps {
   signatureData?: string | null;
   userTym?: number;
   onUpdate: (data: {
-    recipientName?: string;
-    senderName?: string;
     message?: string;
     richContent?: string | null; // ✅ Thêm richContent
     usedFonts?: string[]; // ✅ Fonts đã sử dụng
@@ -275,8 +273,6 @@ function DropZone({
 }
 
 export default function Step3Message({
-  recipientName,
-  senderName,
   message,
   letterPages,
   onUpdateLetterPages,
@@ -323,6 +319,24 @@ export default function Step3Message({
     return initial;
   });
 
+  // ✅ Track page types ('text' | 'image')
+  const [pageTypes, setPageTypes] = useState<('text' | 'image')[]>(() => {
+    const count = letterPages?.length || 1;
+    return Array(count).fill('text');
+  });
+
+  // ✅ Track image URLs for image pages
+  const [pageImages, setPageImages] = useState<(string | null)[]>(() => {
+    const count = letterPages?.length || 1;
+    return Array(count).fill(null);
+  });
+
+  // ✅ Track image transforms for image pages
+  const [pageImageTransforms, setPageImageTransforms] = useState<(ImageTransform | null)[]>(() => {
+    const count = letterPages?.length || 1;
+    return Array(count).fill(null);
+  });
+
   // Ref to store current editor content before page change
   const editorContentRef = useRef<string>('');
   // ✅ Ref to get HTML directly from editor instance (returns { html, usedFonts })
@@ -333,39 +347,22 @@ export default function Step3Message({
   // Check if current page is in editing mode
   const isEditing = editingPages[activePage] !== false; // Default to true (editing mode)
 
+  // ✅ Check if current page is image type
+  const currentPageType = pageTypes[activePage] || 'text';
+  const isImagePage = currentPageType === 'image';
+
   // Multi-page logic
   const pageCount = letterPages && letterPages.length > 0 ? letterPages.length : 1;
   const FREE_PAGES = 2;
   const ADD_PAGE_COST = 10;
   const canAddPage = pageCount < FREE_PAGES || userTym >= ADD_PAGE_COST;
 
-  // Get the display content for a page (with headers/footers)
+  // Get the display content for a page (no headers/footers)
   const getDisplayContent = useCallback((pageIndex: number, rawContent: string) => {
-    let content = rawContent || '';
-    
-    // Always add recipient to first page if recipientName exists
-    if (pageIndex === 0 && recipientName) {
-      // Remove any existing recipient header first
-      content = content.replace(/^<p>Gửi\s+<span[^>]*>[^<]*<\/span>,?<\/p>(<p><br><\/p>)?/i, '');
-      // Add recipient header
-      const recipientHtml = `<p>Gửi <span style="color: #b45309; font-weight: 600;">${recipientName}</span>,</p><p><br></p>`;
-      content = recipientHtml + content;
-    }
-    
-    // Always add sender to last page if senderName exists
-    if (pageIndex === pageCount - 1 && senderName) {
-      // Remove any existing sender footer first
-      content = content.replace(/<p><br><\/p><p[^>]*style="text-align:\s*right[^"]*"[^>]*>Yêu thương,[\s\S]*?<\/p>$/i, '');
-      // Add sender footer
-      const senderHtml = `<p><br></p><p style="text-align: right;">Yêu thương,<br><span style="color: #b45309; font-weight: 600; font-size: 1.1em;">${senderName}</span></p>`;
-      content = content + senderHtml;
-    }
-    
-    return content;
-  }, [recipientName, senderName, pageCount]);
+    return rawContent || '';
+  }, []);
 
-  // Extract raw content from display content (remove headers/footers)
-  // Always extract to ensure we store clean content without headers/footers
+  // Extract raw content from display content (no headers/footers to remove)
   const extractRawContent = useCallback((html: string | { html: string; usedFonts?: any[] } | null | undefined, pageIndex: number) => {
     // ✅ Handle case where html might be an object with { html, usedFonts }
     let htmlString: string;
@@ -377,24 +374,8 @@ export default function Step3Message({
       htmlString = '';
     }
     
-    let raw = htmlString || '';
-    
-    // Remove recipient header from first page - be more careful to preserve content
-    if (pageIndex === 0 && recipientName) {
-      // Match recipient header with various patterns
-      raw = raw.replace(/^<p>Gửi\s+<span[^>]*>.*?<\/span>,?<\/p>/i, '');
-      raw = raw.replace(/^<p><br><\/p>/i, '');
-      // Also handle case where there might be multiple <br> tags
-      raw = raw.replace(/^(<p><br><\/p>)+/i, '');
-    }
-    
-    // Remove sender footer from last page
-    if (pageIndex === pageCount - 1 && senderName) {
-      raw = raw.replace(/<p><br><\/p><p[^>]*style="text-align:\s*right[^"]*"[^>]*>Yêu thương,[\s\S]*?<\/p>$/i, '');
-    }
-    
-    return raw.trim();
-  }, [recipientName, senderName, pageCount]);
+    return htmlString.trim();
+  }, []);
 
   // Determine which content to use: saved or editing
   const currentRawContent = isEditing 
@@ -589,16 +570,28 @@ export default function Step3Message({
   }, [activePage, displayContent, extractRawContent, isEditing, localPages, savedPages, getDisplayContent]);
 
   // Handle add page
-  const handleAddPage = useCallback(() => {
+  const handleAddPage = useCallback((type?: 'text' | 'image') => {
     if (pageCount >= FREE_PAGES && userTym < ADD_PAGE_COST) {
       alert(`Bạn cần ${ADD_PAGE_COST} Tym để thêm trang mới!`);
       return;
     }
 
     if (onUpdateLetterPages) {
-      // Preserve all existing pages and add a new empty one
       const currentPages = letterPages && letterPages.length > 0 ? letterPages : [''];
+      const newPageType = type || 'text';
       const newPages = [...currentPages, ''];
+      
+      // ✅ Update page types
+      setPageTypes(prev => [...prev, newPageType]);
+      
+      // ✅ Update image data for image pages
+      if (newPageType === 'image') {
+        setPageImages(prev => [...prev, null]);
+        setPageImageTransforms(prev => [...prev, null]);
+      } else {
+        setPageImages(prev => [...prev, null]);
+        setPageImageTransforms(prev => [...prev, null]);
+      }
       
       // Update parent state first
       onUpdateLetterPages(newPages);
@@ -633,6 +626,11 @@ export default function Step3Message({
     const newPages = (letterPages || ['']).filter((_, i) => i !== index);
     onUpdateLetterPages(newPages);
     
+    // ✅ Update page types
+    setPageTypes(prev => prev.filter((_, i) => i !== index));
+    setPageImages(prev => prev.filter((_, i) => i !== index));
+    setPageImageTransforms(prev => prev.filter((_, i) => i !== index));
+    
     // Update local pages
     setLocalPages(prev => {
       const updated: Record<number, string> = {};
@@ -653,6 +651,78 @@ export default function Step3Message({
       setActivePage(activePage - 1);
     }
   }, [pageCount, activePage, onUpdateLetterPages, letterPages]);
+
+  // ✅ Handle reorder pages
+  const handleReorderPages = useCallback((reorderedPages: string[]) => {
+    if (!onUpdateLetterPages || !letterPages) return;
+    
+    // Update pages with new order
+    onUpdateLetterPages(reorderedPages);
+    
+    // ✅ Create mapping of old index to new index
+    const indexMap: number[] = [];
+    reorderedPages.forEach((content, newIdx) => {
+      const oldIdx = letterPages.findIndex(p => p === content);
+      indexMap[newIdx] = oldIdx >= 0 ? oldIdx : newIdx;
+    });
+    
+    // ✅ Reorder page types, images, and transforms
+    const reorderedTypes = indexMap.map(oldIdx => pageTypes[oldIdx] || 'text');
+    const reorderedImages = indexMap.map(oldIdx => pageImages[oldIdx] || null);
+    const reorderedTransforms = indexMap.map(oldIdx => pageImageTransforms[oldIdx] || null);
+    setPageTypes(reorderedTypes);
+    setPageImages(reorderedImages);
+    setPageImageTransforms(reorderedTransforms);
+    
+    // Update local pages state to match new order
+    const updatedLocalPages: Record<number, string> = {};
+    reorderedPages.forEach((content, idx) => {
+      const oldIdx = indexMap[idx];
+      updatedLocalPages[idx] = localPages[oldIdx] !== undefined ? localPages[oldIdx] : content || '';
+    });
+    setLocalPages(updatedLocalPages);
+    
+    // Update saved pages as well
+    const updatedSavedPages: Record<number, string> = {};
+    reorderedPages.forEach((content, idx) => {
+      const oldIdx = indexMap[idx];
+      updatedSavedPages[idx] = savedPages[oldIdx] !== undefined ? savedPages[oldIdx] : content || '';
+    });
+    setSavedPages(updatedSavedPages);
+    
+    // Update active page index if needed (keep same content, find new index)
+    if (activePage < letterPages.length) {
+      const currentContent = letterPages[activePage];
+      const newIndex = reorderedPages.findIndex(p => p === currentContent);
+      if (newIndex >= 0 && newIndex !== activePage) {
+        setActivePage(newIndex);
+      }
+    }
+  }, [onUpdateLetterPages, letterPages, localPages, savedPages, activePage, pageTypes, pageImages, pageImageTransforms]);
+
+  // ✅ Handle image change for image pages
+  const handleImageChange = useCallback((imageUrl: string | null) => {
+    setPageImages(prev => {
+      const updated = [...prev];
+      while (updated.length <= activePage) {
+        updated.push(null);
+      }
+      updated[activePage] = imageUrl;
+      return updated;
+    });
+  }, [activePage]);
+
+  // ✅ Handle image transform change for image pages
+  const handleImageTransformChange = useCallback((transform: ImageTransform) => {
+    setPageImageTransforms(prev => {
+      const updated = [...prev];
+      while (updated.length <= activePage) {
+        updated.push(null);
+      }
+      updated[activePage] = transform;
+      return updated;
+    });
+  }, [activePage]);
 
   // Sync local pages with prop when letterPages changes externally
   // But preserve local changes that haven't been saved yet
@@ -958,6 +1028,7 @@ export default function Step3Message({
                 onPageChange={handlePageChange}
                 onAddPage={handleAddPage}
                 onRemovePage={handleRemovePage}
+                onReorderPages={handleReorderPages}
                 canAddPage={canAddPage}
                 addPageCost={ADD_PAGE_COST}
                 userTym={userTym}
@@ -969,8 +1040,8 @@ export default function Step3Message({
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-amber-900 uppercase tracking-wide flex items-center gap-2">
                     <Heart className="w-4 h-4 text-amber-700 fill-current" />
-                    Viết lời nhắn {onUpdateLetterPages && `(Trang ${activePage + 1})`}
-                    {!isEditing && (
+                    {isImagePage ? 'Trang ảnh' : 'Viết lời nhắn'} {onUpdateLetterPages && `(Trang ${activePage + 1})`}
+                    {!isImagePage && !isEditing && (
                       <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full flex items-center gap-1">
                         <Lock className="w-3 h-3" />
                         Đã lưu
@@ -978,26 +1049,28 @@ export default function Step3Message({
                     )}
                   </h3>
                   
-                  {/* Save/Edit Buttons */}
-                  <div className="flex items-center gap-2">
-                    {isEditing ? (
-                      <button
-                        onClick={handleSavePage}
-                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg hover:from-amber-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg text-sm font-medium"
-                      >
-                        <Save className="w-4 h-4" />
-                        Lưu trang
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleEditPage}
-                        className="flex items-center gap-2 px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50 transition-all shadow-sm hover:shadow-md text-sm font-medium"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Chỉnh sửa
-                      </button>
-                    )}
-                  </div>
+                  {/* Save/Edit Buttons - only for text pages */}
+                  {!isImagePage && (
+                    <div className="flex items-center gap-2">
+                      {isEditing ? (
+                        <button
+                          onClick={handleSavePage}
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg hover:from-amber-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg text-sm font-medium"
+                        >
+                          <Save className="w-4 h-4" />
+                          Lưu trang
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleEditPage}
+                          className="flex items-center gap-2 px-4 py-2 bg-white text-amber-700 border border-amber-300 rounded-lg hover:bg-amber-50 transition-all shadow-sm hover:shadow-md text-sm font-medium"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Chỉnh sửa
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1012,20 +1085,31 @@ export default function Step3Message({
                     : `linear-gradient(to bottom right, ${letterContainerBackground}, ${letterContainerBackground})`,
                 }}
               >
-                <DropZone onDrop={handleStickerDrop}>
-                  <div
-                    ref={letterRef}
-                    className="relative rounded-xl shadow-2xl mx-auto overflow-hidden flex flex-col border-2 border-amber-200/50"
-                    style={{
-                      ...getPatternStyle(letterPattern, letterBackground),
-                      width: '612px',
-                      height: '792px',
-                      maxWidth: '100%',
-                      aspectRatio: '612 / 792',
-                    }}
-                  >
-                    {/* Rich Text Editor with Toolbar */}
-                    {isEditing ? (
+                {isImagePage ? (
+                  /* Image Page Editor */
+                  <div className="w-full max-w-2xl mx-auto">
+                    <ImagePageEditor
+                      imageUrl={pageImages[activePage] || null}
+                      transform={pageImageTransforms[activePage] || null}
+                      onImageChange={handleImageChange}
+                      onTransformChange={handleImageTransformChange}
+                    />
+                  </div>
+                ) : (
+                  <DropZone onDrop={handleStickerDrop}>
+                    <div
+                      ref={letterRef}
+                      className="relative rounded-xl shadow-2xl mx-auto overflow-hidden flex flex-col border-2 border-amber-200/50"
+                      style={{
+                        ...getPatternStyle(letterPattern, letterBackground),
+                        width: '612px',
+                        height: '792px',
+                        maxWidth: '100%',
+                        aspectRatio: '612 / 792',
+                      }}
+                    >
+                      {/* Rich Text Editor with Toolbar */}
+                      {isEditing ? (
                       <RichTextEditor
                         content={displayContent}
                         onChange={handleContentChange}
@@ -1039,10 +1123,6 @@ export default function Step3Message({
                         showToolbar={true}
                         showEditorContent={true}
                         onOpenStickerPalette={() => setShowStickerPalette(true)}
-                        recipientName={recipientName}
-                        senderName={senderName}
-                        onRecipientNameChange={(name) => onUpdate({ recipientName: name })}
-                        onSenderNameChange={(name) => onUpdate({ senderName: name })}
                         onGetContent={(getContent) => {
                           // ✅ Store getContent function to get HTML directly from editor
                           getEditorContentRef.current = getContent;
@@ -1060,29 +1140,30 @@ export default function Step3Message({
                       </div>
                     )}
 
-                    {/* Stickers */}
-                    {stickers
-                      .filter((sticker) => sticker.y > 10) // Prevent stickers in top area
-                      .map((sticker) => (
-                        <StickerItem
-                          key={sticker.id}
-                          sticker={sticker}
-                          x={sticker.x}
-                          y={sticker.y}
-                          width={sticker.width}
-                          height={sticker.height}
-                          onRemove={() => handleRemoveSticker(sticker.id)}
-                          onUpdate={(width, height) => handleStickerResize(sticker.id, width, height)}
-                          onMove={(newX, newY) => {
-                            // Prevent moving sticker into top area
-                            const safeY = Math.max(10, newY);
-                            handleStickerMove(sticker.id, newX, safeY);
-                          }}
-                        />
-              ))}
-            </div>
-                </DropZone>
-          </div>
+                      {/* Stickers */}
+                      {stickers
+                        .filter((sticker) => sticker.y > 10) // Prevent stickers in top area
+                        .map((sticker) => (
+                          <StickerItem
+                            key={sticker.id}
+                            sticker={sticker}
+                            x={sticker.x}
+                            y={sticker.y}
+                            width={sticker.width}
+                            height={sticker.height}
+                            onRemove={() => handleRemoveSticker(sticker.id)}
+                            onUpdate={(width, height) => handleStickerResize(sticker.id, width, height)}
+                            onMove={(newX, newY) => {
+                              // Prevent moving sticker into top area
+                              const safeY = Math.max(10, newY);
+                              handleStickerMove(sticker.id, newX, safeY);
+                            }}
+                          />
+                        ))}
+                    </div>
+                  </DropZone>
+                )}
+              </div>
             </div>
           </div>
         </div>

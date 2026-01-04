@@ -12,13 +12,13 @@ import AIVoiceCard from '@/components/card/AIVoiceCard';
 import WebARViewer from '@/components/card/WebARViewer';
 import LiXiButton from '@/components/card/LiXiButton';
 
-interface Step7PreviewProps {
+interface Step5PreviewProps {
   state: CreateCardState;
   userTym: number;
   onSend: () => Promise<string>;
 }
 
-export default function Step7Preview({ state, userTym, onSend }: Step7PreviewProps) {
+export default function Step5Preview({ state, userTym, onSend }: Step5PreviewProps) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
@@ -82,6 +82,86 @@ export default function Step7Preview({ state, userTym, onSend }: Step7PreviewPro
       
       const link = `${window.location.origin}/card/${cardId}`;
       console.log('Share link:', link);
+      
+      const utilities = state.utilities;
+      
+      // ✅ Xử lý scheduled send
+      if (utilities?.scheduledSend && utilities.scheduledSendDate) {
+        const scheduledDate = new Date(utilities.scheduledSendDate);
+        if (scheduledDate > new Date()) {
+          // Lên lịch gửi
+          const scheduleRes = await fetch('/api/cards/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cardId,
+              scheduledSendDate: utilities.scheduledSendDate,
+              sendMethod: utilities.sendMethod,
+              recipientEmail: utilities.recipientEmail,
+              recipientFacebookId: utilities.recipientFacebookId,
+            }),
+          });
+          
+          if (scheduleRes.ok) {
+            const scheduleData = await scheduleRes.json();
+            alert(`Thiệp đã được lên lịch gửi vào ${new Date(utilities.scheduledSendDate).toLocaleString('vi-VN')}`);
+            setShareLink(link);
+            setCardId(cardId);
+            setSent(true);
+            setSending(false);
+            return;
+          }
+        }
+      }
+      
+      // ✅ Xử lý gửi tự động ngay lập tức
+      if (utilities?.sendMethod && utilities.sendMethod !== 'link') {
+        const sendPromises: Promise<any>[] = [];
+        
+        // Gửi email nếu được chọn
+        if ((utilities.sendMethod === 'email' || utilities.sendMethod === 'both') && utilities.recipientEmail) {
+          sendPromises.push(
+            fetch('/api/cards/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                cardId,
+                recipientEmail: utilities.recipientEmail,
+                recipientName: state.recipientName,
+                senderName: state.senderName,
+              }),
+            })
+          );
+        }
+        
+        // Gửi Facebook nếu được chọn
+        if ((utilities.sendMethod === 'facebook' || utilities.sendMethod === 'both') && utilities.recipientFacebookId) {
+          sendPromises.push(
+            fetch('/api/cards/send-facebook', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                cardId,
+                recipientFacebookId: utilities.recipientFacebookId,
+                recipientName: state.recipientName,
+                senderName: state.senderName,
+              }),
+            })
+          );
+        }
+        
+        // Chờ tất cả gửi hoàn thành
+        if (sendPromises.length > 0) {
+          const results = await Promise.allSettled(sendPromises);
+          const successCount = results.filter(r => r.status === 'fulfilled').length;
+          
+          if (successCount > 0) {
+            alert(`Thiệp đã được gửi thành công qua ${successCount} phương thức!`);
+          } else {
+            alert('Có lỗi khi gửi thiệp. Link đã được tạo, bạn có thể chia sẻ thủ công.');
+          }
+        }
+      }
       
       // Set link and cardId
       setShareLink(link);
@@ -177,7 +257,7 @@ export default function Step7Preview({ state, userTym, onSend }: Step7PreviewPro
   // Màn hình thành công với QR code và link
   // Debug: Log state để kiểm tra
   useEffect(() => {
-    console.log('Step7Preview state:', { sent, shareLink, sending, qrCodeDataUrl });
+    console.log('Step5Preview state:', { sent, shareLink, sending, qrCodeDataUrl });
   }, [sent, shareLink, sending, qrCodeDataUrl]);
 
   if (sent && shareLink) {

@@ -1,26 +1,35 @@
 // app/api/cards/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverLogger } from '@/lib/server-logger';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const startTime = Date.now();
+  const url = new URL(request.url);
+  
+  try {
+    serverLogger.logRequest('POST', url.pathname);
+    
+    const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+    if (!user) {
+      serverLogger.warn('Unauthorized card creation attempt', { path: url.pathname });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  const body = await request.json().catch(() => ({}));
-  const draftId = body?.draftId;
+    const body = await request.json().catch(() => ({}));
+    const draftId = body?.draftId;
 
-  if (!draftId || typeof draftId !== 'string') {
-    return NextResponse.json({ error: 'draftId is required' }, { status: 400 });
-  }
+    if (!draftId || typeof draftId !== 'string') {
+      serverLogger.warn('Missing draftId in card creation', { userId: user.id });
+      return NextResponse.json({ error: 'draftId is required' }, { status: 400 });
+    }
 
-  // 1) Load draft (ownership check)
+    // 1) Load draft (ownership check)
   const { data: draft, error: draftError } = await supabase
     .from('card_drafts')
     .select('*')
@@ -131,6 +140,8 @@ export async function POST(request: Request) {
       envelope_seal_color: draft.envelope_seal_color ?? '#c62828',
       envelope_liner_pattern_type: draft.envelope_liner_pattern_type ?? null,
       envelope_liner_color: draft.envelope_liner_color ?? '#ffffff',
+      // ✅ Step 4: Utilities settings - lưu vào card
+      utilities: draft.utilities ? JSON.stringify(draft.utilities) : null,
     })
     .select('id')
     .single();
@@ -152,12 +163,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: upError.message }, { status: 400 });
   }
 
-  await supabase.from('point_transactions').insert({
-    user_id: user.id,
-    amount: cost,
-    type: 'spend',
-    description: `Create card (${card.id})`,
-  });
+    await supabase.from('point_transactions').insert({
+      user_id: user.id,
+      amount: cost,
+      type: 'spend',
+      description: `Create card (${card.id})`,
+    });
 
-  return NextResponse.json({ data: { id: card.id } });
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('POST', url.pathname, {
+      userId: user.id,
+      body: { cardId: card.id },
+      duration,
+    });
+
+    return NextResponse.json({ data: { id: card.id } });
+  } catch (error) {
+    serverLogger.logApiError('POST', url.pathname, error);
+    
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }

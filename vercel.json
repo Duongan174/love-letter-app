@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-scheduled-sends",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/check-subscriptions",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
+

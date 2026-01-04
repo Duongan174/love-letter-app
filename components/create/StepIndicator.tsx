@@ -3,8 +3,8 @@
 
 import { motion } from 'framer-motion';
 import { 
-  LayoutTemplate, Mail, MessageSquare, Image, 
-  Music, PenTool, Send, Check 
+  Mail, MessageSquare, 
+  Music, PenTool, Send, Check, Share2
 } from 'lucide-react';
 
 interface StepIndicatorProps {
@@ -14,20 +14,18 @@ interface StepIndicatorProps {
 }
 
 const steps = [
-  { icon: Mail, label: 'Phong bì' },
-  { icon: LayoutTemplate, label: 'Tem' },
-  { icon: MessageSquare, label: 'Lời nhắn' },
-  { icon: Image, label: 'Ảnh' },
-  { icon: Music, label: 'Nhạc' },
-  { icon: PenTool, label: 'Chữ ký' },
+  { icon: Mail, label: 'Phong bì & Tem' },
+  { icon: MessageSquare, label: 'Lời nhắn & Ảnh' },
+  { icon: Music, label: 'Nhạc & Chữ ký' },
+  { icon: Share2, label: 'Tiện ích' },
   { icon: Send, label: 'Gửi' },
 ];
 
-export default function StepIndicator({ currentStep, totalSteps = 7, onStepClick }: StepIndicatorProps) {
+export default function StepIndicator({ currentStep, totalSteps = 5, onStepClick }: StepIndicatorProps) {
   return (
-    <div className="w-full py-4 px-4">
+    <div className="w-full">
       {/* Desktop View */}
-      <div className="hidden md:flex items-center justify-center max-w-4xl mx-auto">
+      <div className="hidden md:flex items-center justify-center">
         {steps.map((step, index) => {
           const StepIcon = step.icon;
           const isCompleted = index < currentStep - 1;
@@ -41,39 +39,55 @@ export default function StepIndicator({ currentStep, totalSteps = 7, onStepClick
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: index * 0.1 }}
-                className="flex flex-col items-center"
+                className="flex flex-col items-center gap-1.5"
               >
                 <button
                   onClick={() => onStepClick && isCompleted && onStepClick(index + 1)}
                   disabled={!isCompleted}
                   className={`
-                    relative w-12 h-12 rounded-full flex items-center justify-center
-                    transition-all duration-300 shadow-lg
+                    relative rounded-full flex items-center justify-center
+                    transition-all duration-300
                     ${isCompleted 
-                      ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white cursor-pointer hover:scale-110 hover:shadow-xl' 
+                      ? 'w-14 h-14 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-800 text-white cursor-pointer hover:scale-110 hover:shadow-xl shadow-lg' 
                       : isCurrent 
-                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white ring-4 ring-amber-200 cursor-default' 
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        ? 'w-16 h-16 bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700 text-white ring-4 ring-amber-200/50 ring-offset-2 ring-offset-white cursor-default shadow-xl' 
+                        : 'w-12 h-12 bg-gray-100 text-gray-400 cursor-not-allowed shadow-sm'
                     }
                   `}
                 >
                   {isCompleted ? (
-                    <Check className="w-6 h-6" />
+                    <Check className={`${isCompleted ? 'w-7 h-7' : 'w-5 h-5'}`} strokeWidth={3} />
                   ) : (
-                    <StepIcon className="w-5 h-5" />
+                    <StepIcon className={isCurrent ? 'w-7 h-7' : 'w-5 h-5'} strokeWidth={isCurrent ? 2.5 : 1.5} />
                   )}
                   
-                  {/* Pulse animation for current step */}
+                  {/* Glow effect for current step */}
                   {isCurrent && (
-                    <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-30" />
+                    <motion.span 
+                      className="absolute inset-0 rounded-full bg-amber-400/30"
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        opacity: [0.3, 0.1, 0.3]
+                      }}
+                      transition={{ 
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                    />
                   )}
                 </button>
                 
-                {/* Label */}
+                {/* Label - Gần icon hơn và rõ ràng hơn */}
                 <span 
                   className={`
-                    mt-2 text-xs font-medium transition-colors
-                    ${isCurrent ? 'text-amber-700' : isCompleted ? 'text-amber-700 hover:text-amber-900' : 'text-gray-400'}
+                    text-xs font-semibold transition-all whitespace-nowrap
+                    ${isCurrent 
+                      ? 'text-amber-700 font-bold' 
+                      : isCompleted 
+                        ? 'text-amber-700 hover:text-amber-900' 
+                        : 'text-gray-400'
+                    }
                   `}
                 >
                   {step.label}

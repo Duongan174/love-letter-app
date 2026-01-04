@@ -3,11 +3,13 @@ import './globals.css';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Providers } from './providers';
+import ErrorBoundaryWrapper from '@/components/providers/ErrorBoundaryWrapper';
+import { serverLogger } from '@/lib/server-logger';
 
 // Load fonts bằng next/font để đảm bảo subset Vietnamese được tải đúng,
 // tránh lỗi dấu khi font fallback hoặc thiếu glyph.
 import {
-  Be_Vietnam_Pro,
+  // Be_Vietnam_Pro, // ✅ Tạm thời comment do lỗi Turbopack, dùng Inter thay thế
   Playfair_Display,
   Dancing_Script,
   Lexend,
@@ -32,10 +34,18 @@ import {
 // import { EB_Garamond } from 'next/font/google';
 
 // Font nền tảng cho tiếng Việt (ưu tiên dùng cho nội dung tiếng Việt)
-const beVietnamPro = Be_Vietnam_Pro({
-  subsets: ['vietnamese', 'latin'],
+// Fix: Tạm thời comment Be_Vietnam_Pro do lỗi Turbopack, dùng Inter thay thế
+// Inter có hỗ trợ tiếng Việt tốt và không gặp lỗi với Turbopack
+// const beVietnamPro = Be_Vietnam_Pro({
+//   subsets: ['latin'],
+//   weight: ['300', '400', '500', '600', '700', '800'],
+//   display: 'swap',
+//   variable: '--font-vn',
+// });
+// Tạm thời dùng Inter làm fallback
+const beVietnamPro = Inter({
+  subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700', '800'],
-  style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-vn',
 });
@@ -44,17 +54,17 @@ const beVietnamPro = Be_Vietnam_Pro({
 const playfair = Playfair_Display({
   subsets: ['vietnamese', 'latin'],
   weight: ['400', '500', '600', '700', '800', '900'],
-  style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-display',
+  adjustFontFallback: true,
 });
 
 const cormorant = Cormorant_Garamond({
   subsets: ['vietnamese', 'latin'],
   weight: ['300', '400', '500', '600', '700'],
-  style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-heading',
+  adjustFontFallback: true,
 });
 
 // Tạm thời sử dụng Cormorant_Garamond thay cho EB_Garamond do lỗi Turbopack
@@ -71,9 +81,9 @@ const ebGaramond = cormorant; // Fallback tạm thời
 const crimsonPro = Crimson_Pro({
   subsets: ['vietnamese', 'latin'],
   weight: ['200', '300', '400', '500', '600', '700'],
-  style: ['normal', 'italic'],
   display: 'swap',
   variable: '--font-body',
+  adjustFontFallback: true,
 });
 
 // Lexend thường dùng cho UI hiện đại — có subset Vietnamese
@@ -202,6 +212,13 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  // ✅ Log layout render (chỉ trong development)
+  if (process.env.NODE_ENV === 'development') {
+    serverLogger.debug('RootLayout rendering', {
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   return (
     <html
       lang="vi"
@@ -240,7 +257,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           'antialiased',
         ].join(' ')}
       >
-        <Providers>{children}</Providers>
+        {/* ✅ Error Boundary wrapper (Client Component) để bắt lỗi từ client components */}
+        <ErrorBoundaryWrapper>
+          <Providers>{children}</Providers>
+        </ErrorBoundaryWrapper>
       </body>
     </html>
   );

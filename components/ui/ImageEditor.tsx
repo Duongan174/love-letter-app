@@ -49,6 +49,27 @@ export default function ImageEditor({
     setTransform(initialTransform);
   }, [src]);
 
+  // ✅ Add wheel event listener with non-passive option to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      setTransform(prev => ({
+        ...prev,
+        scale: Math.max(0.5, Math.min(3, prev.scale + delta)),
+      }));
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', handleWheelEvent);
+    };
+  }, []);
+
   const handleZoomIn = useCallback(() => {
     setTransform(prev => ({
       ...prev,
@@ -128,15 +149,6 @@ export default function ImageEditor({
     setIsDragging(false);
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.05 : 0.05;
-    setTransform(prev => ({
-      ...prev,
-      scale: Math.max(0.5, Math.min(3, prev.scale + delta)),
-    }));
-  }, []);
-
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
       {/* Image Container */}
@@ -151,7 +163,6 @@ export default function ImageEditor({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onWheel={handleWheel}
       >
         {/* Grid overlay for guidance */}
         <div className="absolute inset-0 pointer-events-none z-10 opacity-20">

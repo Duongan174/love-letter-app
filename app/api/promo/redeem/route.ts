@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { serverLogger } from '@/lib/server-logger';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  const url = new URL(request.url);
+  
   try {
+    serverLogger.logRequest('POST', url.pathname);
+    
     const supabase = await createClient();
     const body = await request.json();
     const { code, user_id } = body;
 
-    console.log('Redeem request:', { code, user_id: user_id ? 'present' : 'missing' });
+    serverLogger.info('Promo code redeem request', { 
+      code: code ? 'present' : 'missing',
+      userId: user_id ? 'present' : 'missing',
+    });
 
     if (!code || !code.trim()) {
       return NextResponse.json({ error: 'Vui lòng nhập mã khuyến mãi' }, { status: 400 });
@@ -77,6 +86,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: errorMessage }, { status: statusCode });
     }
 
+    const duration = Date.now() - startTime;
+    serverLogger.logRequest('POST', url.pathname, {
+      userId: user_id,
+      body: { code, tymReceived: result.tym_received },
+      duration,
+    });
+
     return NextResponse.json({
       success: true,
       message: result.message || `Nhận thành công ${result.tym_received} Tym!`,
@@ -85,7 +101,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Redeem error:', error);
+    const duration = Date.now() - startTime;
+    serverLogger.logApiError('POST', url.pathname, error);
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
   }
 }

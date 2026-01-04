@@ -1,5 +1,7 @@
 // types/index.ts
 
+export type SubscriptionTier = 'free' | 'plus' | 'pro' | 'ultra';
+
 export interface User {
   id: string;
   email: string;
@@ -8,6 +10,8 @@ export interface User {
   role: 'user' | 'admin';
   points: number;
   provider: 'facebook' | 'tiktok';
+  subscription_tier?: SubscriptionTier;
+  subscription_expires_at?: string | null;
   created_at: string;
 }
 
