@@ -73,25 +73,34 @@ function StickerItem({
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
+  const handleDragStart = useCallback((clientX: number, clientY: number) => {
     if (isResizing) return;
-    e.stopPropagation();
     setIsDragging(true);
     const rect = containerRef.current?.parentElement?.getBoundingClientRect();
     if (rect) {
       setDragStart({
-        x: e.clientX - (rect.left + (rect.width * x / 100)),
-        y: e.clientY - (rect.top + (rect.height * y / 100)),
+        x: clientX - (rect.left + (rect.width * x / 100)),
+        y: clientY - (rect.top + (rect.height * y / 100)),
       });
     }
   }, [x, y, isResizing]);
 
-  const handleDragMove = useCallback((e: MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleDragStart(e.clientX, e.clientY);
+  }, [handleDragStart]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    handleDragStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, [handleDragStart]);
+
+  const handleDragMove = useCallback((clientX: number, clientY: number) => {
     if (!isDragging || !containerRef.current?.parentElement) return;
     
     const rect = containerRef.current.parentElement.getBoundingClientRect();
-    const newX = ((e.clientX - dragStart.x - rect.left) / rect.width) * 100;
-    const newY = ((e.clientY - dragStart.y - rect.top) / rect.height) * 100;
+    const newX = ((clientX - dragStart.x - rect.left) / rect.width) * 100;
+    const newY = ((clientY - dragStart.y - rect.top) / rect.height) * 100;
     
     onMove(
       Math.max(0, Math.min(100, newX)),
@@ -99,26 +108,43 @@ function StickerItem({
     );
   }, [isDragging, dragStart, onMove]);
 
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    handleDragMove(e.clientX, e.clientY);
+  }, [handleDragMove]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, [handleDragMove]);
+
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
   }, []);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleResizeStart = useCallback((clientX: number, clientY: number) => {
     setIsResizing(true);
     setResizeStart({
-      x: e.clientX,
-      y: e.clientY,
+      x: clientX,
+      y: clientY,
       width,
       height,
     });
   }, [width, height]);
 
-  const handleResizeMove = useCallback((e: MouseEvent) => {
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleResizeStart(e.clientX, e.clientY);
+  }, [handleResizeStart]);
+
+  const handleResizeTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    handleResizeStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, [handleResizeStart]);
+
+  const handleResizeMove = useCallback((clientX: number, clientY: number) => {
     if (!isResizing) return;
     
-    const deltaX = e.clientX - resizeStart.x;
-    const deltaY = e.clientY - resizeStart.y;
+    const deltaX = clientX - resizeStart.x;
+    const deltaY = clientY - resizeStart.y;
     const scale = Math.max(0.5, Math.min(3, 1 + (deltaX + deltaY) / 200));
     
     onUpdate(
@@ -127,39 +153,56 @@ function StickerItem({
     );
   }, [isResizing, resizeStart, onUpdate]);
 
+  const handleResizeMouseMove = useCallback((e: MouseEvent) => {
+    handleResizeMove(e.clientX, e.clientY);
+  }, [handleResizeMove]);
+
+  const handleResizeTouchMove = useCallback((e: TouchEvent) => {
+    handleResizeMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, [handleResizeMove]);
+
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false);
   }, []);
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleDragMove);
+      document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleDragEnd);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleDragEnd);
       return () => {
-        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleDragEnd);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleDragEnd);
       };
     }
-  }, [isDragging, handleDragMove, handleDragEnd]);
+  }, [isDragging, handleMouseMove, handleDragEnd, handleTouchMove]);
 
   useEffect(() => {
     if (isResizing) {
-      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mousemove', handleResizeMouseMove);
       document.addEventListener('mouseup', handleResizeEnd);
+      document.addEventListener('touchmove', handleResizeTouchMove, { passive: false });
+      document.addEventListener('touchend', handleResizeEnd);
       return () => {
-        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mousemove', handleResizeMouseMove);
         document.removeEventListener('mouseup', handleResizeEnd);
+        document.removeEventListener('touchmove', handleResizeTouchMove);
+        document.removeEventListener('touchend', handleResizeEnd);
       };
     }
-  }, [isResizing, handleResizeMove, handleResizeEnd]);
+  }, [isResizing, handleResizeMouseMove, handleResizeEnd, handleResizeTouchMove]);
 
   return (
     <motion.div
       ref={containerRef}
       initial={{ scale: 0 }}
       animate={{ scale: 1 }}
-      onMouseDown={handleDragStart}
-      className="absolute cursor-move group"
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+      className="absolute cursor-move group touch-none"
       style={{
         left: `${x}%`,
         top: `${y}%`,
@@ -184,8 +227,9 @@ function StickerItem({
       </button>
       {/* Resize handle */}
       <div
-        onMouseDown={handleResizeStart}
-        className="absolute bottom-0 right-0 w-4 h-4 bg-burgundy/80 rounded-tl-lg cursor-nwse-resize opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
+        onMouseDown={handleResizeMouseDown}
+        onTouchStart={handleResizeTouchStart}
+        className="absolute bottom-0 right-0 w-6 h-6 bg-burgundy/80 rounded-tl-lg cursor-nwse-resize opacity-0 group-hover:opacity-100 transition flex items-center justify-center touch-none z-20"
         style={{ cursor: 'nwse-resize' }}
       >
         <div className="w-2 h-2 border border-cream" />

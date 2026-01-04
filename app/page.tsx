@@ -28,10 +28,12 @@ const FloatingElement = ({
   children,
   className = '',
   delay = 0,
+  disableAnimation = false,
 }: {
   children: React.ReactNode;
   className?: string;
   delay?: number;
+  disableAnimation?: boolean;
 }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.8 }}
@@ -40,8 +42,8 @@ const FloatingElement = ({
     className={`absolute pointer-events-none ${className}`}
   >
     <motion.div
-      animate={{ y: [0, -12, 0], rotate: [-1, 1, -1] }}
-      transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay }}
+      animate={disableAnimation ? {} : { y: [0, -12, 0], rotate: [-1, 1, -1] }}
+      transition={disableAnimation ? {} : { duration: 6, repeat: Infinity, ease: 'easeInOut', delay }}
     >
       {children}
     </motion.div>
@@ -55,8 +57,19 @@ const FloatingElement = ({
 export default function LandingPage() {
   const reduceMotion = useReducedMotion();
   const [showStickyCta, setShowStickyCta] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const { scrollYProgress } = useScroll();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.matchMedia('(max-width: 768px)').matches);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     // Mobile sticky CTA appears after the user starts scrolling
@@ -82,16 +95,16 @@ export default function LandingPage() {
 
         {/* Floating decorative elements */}
         <div className="absolute inset-0">
-          <FloatingElement className="top-20 left-[8%] opacity-20" delay={0.2}>
+          <FloatingElement className="top-20 left-[8%] opacity-20" delay={0.2} disableAnimation={isMobile}>
             <Heart className="w-16 h-16 text-burgundy" />
           </FloatingElement>
-          <FloatingElement className="top-32 right-[12%] opacity-15" delay={0.4}>
+          <FloatingElement className="top-32 right-[12%] opacity-15" delay={0.4} disableAnimation={isMobile}>
             <Mail className="w-14 h-14 text-gold" />
           </FloatingElement>
-          <FloatingElement className="bottom-28 left-[14%] opacity-15" delay={0.6}>
+          <FloatingElement className="bottom-28 left-[14%] opacity-15" delay={0.6} disableAnimation={isMobile}>
             <Star className="w-12 h-12 text-burgundy" />
           </FloatingElement>
-          <FloatingElement className="bottom-36 right-[10%] opacity-10" delay={0.8}>
+          <FloatingElement className="bottom-36 right-[10%] opacity-10" delay={0.8} disableAnimation={isMobile}>
             <Feather className="w-16 h-16 text-gold" />
           </FloatingElement>
         </div>

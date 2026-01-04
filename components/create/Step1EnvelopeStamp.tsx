@@ -351,6 +351,16 @@ export default function Step1EnvelopeStamp({
   
   // ✅ Canva-style sidebar state
   const [activeSection, setActiveSection] = useState<SidebarSection>('colors');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.matchMedia('(max-width: 768px)').matches);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Stamps state
   const [stamps, setStamps] = useState<any[]>([]);
@@ -843,9 +853,17 @@ export default function Step1EnvelopeStamp({
   };
 
   return (
-    <div className="flex h-full gap-0 overflow-hidden w-full">
-      {/* ✅ Left Sidebar - Canva Style - Luôn sát bên trái, bắt đầu từ dưới header */}
-      <div className="w-20 bg-gray-50 border-r border-gray-200 flex flex-col items-center py-4 gap-2 flex-shrink-0 fixed left-0 top-16 bottom-0 z-10">
+    <div className="flex h-full gap-0 overflow-hidden w-full relative">
+      {/* ✅ Sidebar - Responsive: Left for Desktop, Bottom for Mobile */}
+      <div
+        className={`
+          flex items-center gap-2 flex-shrink-0 fixed z-50 bg-white border-gray-200
+          ${isMobile
+            ? 'bottom-0 left-0 right-0 h-16 border-t px-4 justify-around w-full'
+            : 'left-0 top-16 bottom-0 w-20 border-r flex-col py-4'
+          }
+        `}
+      >
         {SIDEBAR_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
@@ -856,18 +874,25 @@ export default function Step1EnvelopeStamp({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className={`
-                w-14 h-16 flex flex-col items-center justify-center gap-1.5 rounded-xl transition-all relative
-                ${isActive 
-                  ? 'bg-gradient-to-br from-amber-100 to-amber-50 text-amber-700 border-2 border-amber-400 shadow-md' 
-                  : 'text-gray-600 hover:bg-gray-100 border-2 border-transparent'
+                flex items-center justify-center gap-1.5 rounded-xl transition-all relative
+                ${isMobile
+                  ? `flex-col p-1 ${isActive ? 'text-amber-700' : 'text-gray-500'}`
+                  : `w-14 h-16 flex-col ${isActive ? 'bg-gradient-to-br from-amber-100 to-amber-50 text-amber-700 border-2 border-amber-400 shadow-md' : 'text-gray-600 hover:bg-gray-100 border-2 border-transparent'}`
                 }
               `}
               title={item.label}
             >
-              {isActive && (
+              {isActive && !isMobile && (
                 <motion.div
                   layoutId="activeIndicator"
                   className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 bg-gradient-to-b from-amber-500 to-amber-600 rounded-r-full"
+                  initial={false}
+                />
+              )}
+              {isActive && isMobile && (
+                 <motion.div
+                  layoutId="activeIndicatorMobile"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-amber-500 rounded-b-full"
                   initial={false}
                 />
               )}
@@ -883,18 +908,24 @@ export default function Step1EnvelopeStamp({
         })}
       </div>
 
-      {/* ✅ Middle Panel - Content Panel */}
+      {/* ✅ Panel - Responsive: Side Panel for Desktop, Bottom Sheet for Mobile */}
       <AnimatePresence mode="wait">
         {activeSection && (
           <motion.div
             key={activeSection}
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 280, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
+            initial={isMobile ? { y: '100%', opacity: 0 } : { width: 0, opacity: 0 }}
+            animate={isMobile ? { y: 0, opacity: 1 } : { width: 280, opacity: 1 }}
+            exit={isMobile ? { y: '100%', opacity: 0 } : { width: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="bg-white border-r border-gray-200 overflow-hidden flex-shrink-0 flex flex-col fixed left-20 top-16 bottom-0 z-10"
+            className={`
+              bg-white border-gray-200 overflow-hidden flex-shrink-0 flex flex-col fixed z-40
+              ${isMobile
+                ? 'bottom-16 left-0 right-0 h-[60vh] rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t'
+                : 'left-20 top-16 bottom-0 border-r'
+              }
+            `}
           >
-            <div className="w-[280px] h-full flex flex-col overflow-hidden">
+            <div className={`flex flex-col overflow-hidden h-full ${!isMobile && 'w-[280px]'}`}>
               <div className="flex-shrink-0 p-4 pb-3 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-gray-800">
@@ -919,12 +950,13 @@ export default function Step1EnvelopeStamp({
         )}
       </AnimatePresence>
 
-      {/* ✅ Right Preview Area - Full bleed background, không còn khoảng trắng */}
+      {/* ✅ Right Preview Area - Full bleed background */}
       <div 
         className="flex-1 min-h-screen transition-all duration-300 relative overflow-hidden" 
         style={{ 
-          marginLeft: activeSection ? '300px' : '80px',
-          width: activeSection ? 'calc(100% - 300px)' : 'calc(100% - 80px)',
+          marginLeft: isMobile ? '0' : (activeSection ? '300px' : '80px'),
+          width: isMobile ? '100%' : (activeSection ? 'calc(100% - 300px)' : 'calc(100% - 80px)'),
+          marginBottom: isMobile ? '64px' : '0', // Add margin for bottom nav on mobile
           backgroundColor: coverBgStyle.backgroundColor || coverBackground,
           backgroundImage: coverBgStyle.backgroundImage 
             ? `
